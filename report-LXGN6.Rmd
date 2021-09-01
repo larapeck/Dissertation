@@ -1,0 +1,1970 @@
+---
+title: "Excess Mortality in Italy at a Sub-national Level During the First-wave of the COVID-19 Pandemic: a Two-stage Spatio-temporal Analysis"
+author: | 
+  | LXGN6
+  |
+  | Department of Statistical Science
+  |
+  | Supervisor: Professor Gianluca Baio
+  |  
+  | Written report for the STAT0035 Project
+date: |
+  | Word Count: 15,948
+  | \newpage
+geometry: "left=2cm,right=2cm,top=2cm,bottom=2cm"
+header-includes:
+   - \usepackage{amsmath}
+   - \usepackage{setspace}
+   - \usepackage{pdfpages}
+   - \usepackage{fancyhdr}
+   - \pagestyle{fancy}
+output: 
+ pdf_document:
+   latex_engine: xelatex
+   citation_package: biblatex
+   toc: yes
+   number_sections: yes
+   keep_tex: yes
+bibliography: STAT0035.bib
+csl: ucl-university-college-harvard.csl
+link-citations: true
+linkcolor: blue
+biblio-style: "authoryear"
+---
+
+\newpage 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, echo=FALSE}
+#options(tikzDefaultEngine = 'pdftex')
+#options(tikzLatex = #"C:\Users\lpeck\OneDrive\Documents\STAT0035\Tex\miktex\c#onfig\pdflatex")
+```
+
+\doublespacing
+
+# Acknowledgements
+
+Thank you to Professor Gianluca Baio for providing me with his guidance and insight throughout the undertaking of this project. I have gained a great deal of skills and knowledge, especially with Gianluca's help at each stage of the process. A further thanks must go to Dr. Sam Livingstone for his continued support throughout my entire experience at UCL. 
+\newpage
+
+# Abstract
+
+*Objectives*
+
+This project looks at the Italian population’s experience of COVID-19 during the beginning stages of the pandemic. Using a Bayesian probabilistic methodology, the model estimates the extent of excess mortality faced across the whole of the Italian territory, stratified by sex, and explores the heterogeneity across the 107 Italian provinces. 
+
+*Method*
+
+Weekly excess mortality is quantified by comparing the observed mortality data from the first 4 months of 2020 (the ‘first-wave’) to model-based predictions of weekly mortality for 2020, in the absence of a global pandemic. The model-based predictions are based on trends established by the previous 4 years of mortality data on Italian residents and provide weekly death counts for each of its 107 provinces. 
+
+*Results*
+
+The model establishes significant excess mortality across most northern regions of Italy. Particularly in Lombardia, Italy’s most densely populated region, where it quantifies the total excess mortality as 11,882 (10,889 to 12,778) males and 10,639 (8,882 to 12,356) females for the entire study period. This area was the worst affected and excess mortality rates exceeded the predicted interval by the end of February. North-Eastern and North-Western regions also saw significant excess mortality, with an estimated 6,720 and 5,678 total deaths, respectively (see Table 1 for 95$\%$ intervals). Significant excess morality rates in these two areas was delayed, taking a couple of extra weeks to show compared to Lombardia. Finally, the Centre saw comparatively mild excess mortality, at 152 (-1,229 to 1,456) for males and -414 (-2,897 to 2,003) for females, and the South is estimated to have had almost no excess mortality for either gender, despite containing the greatest number of sub-areas. The model estimates 825 fewer male deaths and 1,199 fewer female deaths than expected in the South during the first-wave of the COVID-19 pandemic, which have an 86.1$\%$ and 82.0$\%$ posterior probability of being less than 0, respectively. 
+
+```{r, Abstract data table, echo=FALSE,warning=FALSE,message=FALSE,error=FALSE}
+library(kableExtra)
+library(dplyr)
+
+
+## Load table data
+load("macroregion_abstract_female.RData")
+load("macroregion_abstract_male.RData")
+
+
+## Make table matrix
+macro.table2 = matrix(c(centro.m, centro.f, lomb.m, lomb.f, nordo.m, nordo.f, norde.m,
+                           norde.f, sud.m, sud.f), byrow=FALSE, nrow=4)
+
+
+## Alter column and row names
+row.names(macro.table2) =c("Excess all-cause mortality", "Lower bound", "Upper bound", "Observed all-cause mortality")
+colnames(macro.table2) = c("Males", "Females", "Males", "Females", "Males", "Females", "Males", "Females", "Males", "Females")
+
+
+macroarea_table <- kable(macro.table2, caption="Excess all-cause mortality count (and its 95\\% interval) and observed mortality count for each macro-region, across the enire study period. The predicted mortality uses the posterior mean.",align="c")
+
+headed_macroarea_table <- add_header_above(macroarea_table, header=c(" "=1,"The Centre"=2,"Lombardia"=2, "The North-West"=2,
+                                                                       "The North-East"=2,"The South"=2))
+
+#headed_macroarea_table = headed_macroarea_table %>% column_spec(1, width = "2cm") %>%
+#  column_spec(2:7, width = "3.5cm")
+
+headed_macroarea_table = headed_macroarea_table %>% kable_styling(latex_options="hold_position") %>% kable_styling(latex_options="scale_down")
+
+headed_macroarea_table
+
+
+```
+
+*Conclusions*
+
+This project gives a detailed view of excess mortality and its trends over time in Italy. It estimates and compares the differences in excess mortality experienced across different macro-areas, regions and provinces. In doing so, it quantifies the dissimilar impact of COVID-19 in the north and south and discusses reasons for this heterogeneity, like the effective communication of local governments, population density and quality of hospital practices. Furthermore, it provides a framework for the monitoring of mortality rates that could aid Italian government in hindering future excess burden on its health services.
+
+\newpage
+
+# Introduction
+
+## Motivations
+
+Globally, COVID-19 has had some of the largest economic and social impacts of any pandemic in recent human history. Many countries have experienced widespread devastation in the form of overwhelming fatalities within their population and economic downturn due to enforced lockdown measures. During the entirety of the pandemic, Italy has been one of the worst affected countries, particularly during the initial stages of the pandemic, in terms of absolute number of fatalities and fatalities as a proportion of the population, and has ranked within the top 5 globally for both figures. Various factors like an ageing population, inconsistencies amongst regional healthcare facilities and delays in effective lockdown measures likely contributed to the substantial impact on Italian citizens during the first half of 2020 and will be further considered in later sections. This project assesses the impact of COVID-19 on Italian mortality during the first wave of the pandemic, within the first four months of 2020, and the degree to which different areas of Italy were affected. 
+
+## Objectives
+
+The aim of this project is to provide a sub-national analysis of weekly excess deaths in Italy during January to April of 2020, in which cases of COVID-19 first appeared in Italy. The study period covers the ‘first-wave’ of the pandemic, when cases escalated rapidly and Italian hospitals were least prepared to handle the burden. Using data on all-cause mortality in Italy from previous years, this project hopes to precisely present the excess numbers of deaths by comparing the observed deaths with those predicted by a model, in all Italian provinces and regions during 2020. With intention to develop and select an appropriate model specification, having compared it with various iterations of that model and determined which is best in the context of this project, to make the predictions. Assessment of excess mortality during this study period can provide some insight into the efficacy of lockdown measures amongst different areas of Italy, by tracking the changes of excess mortality in response to key restrictions. The main questions this project will aim to answer are:
+
+1. What is the most appropriate way to model excess mortality in Italy, while accounting for heterogeneity across areas and changes over time?
+2. By how much did excess mortality in the north of Italy differ from the south?
+3. What were the general patterns in excess mortality across the study period?
+4. Were there significant differences in excess mortality between men and women?
+
+## Summary of Model Design
+
+The following section summarises the final model specification that is used for producing the model-based predictions of mortality counts in 2020. Inspiration for this specification comes from the paper by @blangiardo_2020_estimating. In later sections, more detailed explanation is given for each aspect of the model, as well as a discussion on advantages of this version over previous iterations. 
+
+Any scenario in which one wishes to quantify the excess of a particular variable due to an abnormal event’s occurrence, requires a comparison of the quantities of that variable in a state of the world where the event took place, versus a hypothetical state of the world in which the event never occurred. Hence, the key to quantifying the excess mortality in Italy during 2020, is for the most accurate predictions from the final model, to allow for comparison of the observed deaths in 2020 (with COVID-19) against the model-based predictions of deaths in a ‘typical’ year (without COVID-19). In principle, data on Italian mortality in different areas for the last 4 years are used to establish a trend, which can then be used to estimate the expected mortality in those areas for 2020, in a ‘regular’ year. These expected values can be compared with their equivalent observed value in 2020, to estimate the excess mortality that can be attributed to that province and week.
+
+Clearly, more accurate predictions ensure the results shown are as close as possible to the ‘true’ impact of COVID-19. With the aim of producing these accurate predictions at a sub-regional level, a spatio-temporal disease mapping approach is taken since it allows for the inclusion of structures which induce both spatial and time correlated effects i.e. between provinces and across the weeks. 
+
+The model uses a hierarchical specification with a stage that models the number of deaths, $y_{ijtk}$, in the $i-$th province $i=(1,…,107)$ within the $j-$th region $j=(1,…,20)$ for the $t-$th week $t=(1,…,17)$ of the $k-$th year $k=(1, …,4)=(2016,…, 2019)$. The death counts, $y_{ijtk}$, are modelled assuming a Poisson distribution with parameter $\mu_{ijtk}=E_{ijtk} \rho_{ijtk}$, to describe the samping variability where: $y_{ijtk} \sim \mbox{Poisson}(\mu_{ijtk})$. As a means of convenience, the remainder of the project will use the shortcut "the data, $\boldsymbol{y}$, follow a Poisson distribution...".
+
+Within the $\mu_{ijtk}$ parameter: $E_{ijtk}$ represents the expected number of deaths in the $i-$th province and $j-$th region, for the $t-$th week of the $k-$th year and $\rho_{ijtk}$ represents the mortality relative risk, in other words the probability of death from exposure to COVID-19 compared to the probability from no exposure, in the $i-$th province and $j-$th region for the $t-$th week of the $k-$th year. 
+
+$E_{ijtk}$ is obtained by calculating the national mortality rates for each age group (0-14, 15-24, 25-34, 35-44, 45-54, 55-64, 65-74, 75+) over the sample period (2016-2019) and applying the rates to the corresponding age-specific population data in each province, over the period 2016-2020. Since this analysis focuses on weekly mortality, sums across the age brackets for each province and year are divided by the number of weeks in each year. The process of adjusting for the age structure of the population at province level across the study period, when computing the expected number of deaths, is called *internal standardisation*. The method described above is a direct method often used in epidemiological studies that produces age standardized mortality rates that 2020 would have had in a ‘normal’ year, given it had the same age distribution as the populations across 2016-2019 [@admin_2010_standardisation].
+The other parameter, $\rho_{ijtk}$, was modelled using the following log-linear specification:
+\begin{equation}\log(\rho_{ijtk})=\beta_{0k}+\upsilon_i+\nu_i+\omega_{jt}+f(x_{it}) .\end{equation}  
+The model has various components:
+
+- The year specific intercept, $\beta_{0k}$, where $\beta_{0k}=\beta_0+\epsilon_k$. Within this equation, $\beta_0$ signifies the global intercept – the average mortality rate across all provinces and years – and $\epsilon_k$ signifies the unstructured random effect, which accounts for year-on-year variations around the global intercept. This random effect is modelled using a Normal distribution, more specifically $\epsilon_k \sim \mbox{Normal}(0,\tau_\epsilon^{-1})$ and represents the deviation of each year from the global intercept. 
+
+- A spatial structure $\upsilon_i+\nu_i$, which is included to account for the spatial correlation between neighbouring provinces. It is modelled using a Besag-York-Mollie (BYM) specification [@besag_1974_spatial]. In particular, $\nu_i$ is an unstructured random effect which is modelled to follow a Normal distribution $\nu_i \sim \mbox{Normal}(0,\tau_\nu^{-1}))$ and $\upsilon_i$ which assumes an intrinsic Conditionally Autoregressive distribution (ICAR) [@besag_1995_on]: 
+\begin{equation} \upsilon_i|\upsilon_{-i} \sim \mbox{Normal}\left({\sum_{j\in D_i} \upsilon_i\over n_{D_i}}, n_{D_i}\tau_\upsilon\right) .\end{equation}
+Note that here $D_i$ is the set of areas that neighbour the i-th province and $n_{D_i}$ is the total number of those neighbours [@blangiardo_2020_estimating].
+- A temporal structure $\omega_{it}$ that specifies a weekly random effect, for each region. This allows the time dependence, of the current time-period on the previous period, to be modelled by using a first order random walk (RW1). It has a precision $\tau_{\omega}$ that is a common hyperparameter to all the regions. The distribution of $\omega_{jt}$ is assumed to be conditional on the value for that region in the previous time period $\omega_{j,t-1}$: 
+                      \begin{equation}\omega_{jt}|\omega_{j,t-1} \sim  \mbox{Normal}(\omega_{j,t-1},\tau_\omega^-1) . \end{equation}
+-	The effect of the temperature $x_{it}$ which represents the average weekly temperature of each province. It is modelled using a conditional distribution (see equation 4), and a non-linear effect $f(\cdot)$ which assumes a second order random walk (RW2):
+                        \begin{equation}x_{it} |x_{i,t-1} \sim \mbox{Normal}(2x_{i,t-1} +x_{i,t-2},\tau_x^{-1}) .\end{equation}
+- The hyperparameters of the above structures use minimally informative hyperpriors: $\tau_{\upsilon}$, $\tau_{\nu}$, $\tau_x$ and $\tau_{\omega}$ follow $\mbox{logGamma}(1,0.1)$; $\beta_0 \sim \mbox{Normal}(0,10^6)$.
+
+It may be noted that in my final model, I have not controlled for sex, as I decided to run two separate models for males and females. Justifications for this will be discussed in later sections, along with more detailed descriptions of the structures included above. 
+
+\newpage
+# Background
+
+## The Global Impact of COVID-19
+\singlespacing
+As of the 2nd of May 2021 [@hopkins_2021_italy]:  
+- Total COVID-19 cases confirmed globally = 153,384,153   
+- Total Italian confirmed cases = 4,035,617   
+- Total deaths worldwide = 3,213,308   
+- Total Italian deaths = 121,033   
+- Number of countries with cases = 222   
+ \doublespacing
+
+On December 31st 2019, Chinese authorities in Wuhan City (Hubei province) reported pneumonia cases with an unknown cause to the World Health Organization (WHO). The strain SARS-CoV-2, coming from a family of viruses called Coronaviruses that are to blame for other diseases like Severe Acute Respiratory Syndrome (SARS) and Middle East Respiratory Syndrome (MERS), was determined to be the reason for the outbreak. Otherwise known as COVID-19, this disease can cause pneumonia, acute respiratory distress syndrome (ARDS), strokes and organ failure which, in severe cases, leads to hospitalization and even death. Cases quickly spread globally, appearing in 5 other countries within 3 weeks of the initial alert and totalling 27 countries by the end of the month. This included countries like the UK, Russia, and Italy, who simultaneously announced their first confirmed cases on 31st January [@kantis_2020_updated]. Confirmation of arrival in Italy occurred when two Chinese tourists tested positive for the disease whilst visiting Rome (in the region of Lazio), its capital city located in the Centre of Italy.
+
+By February 21st, 2020 Italy reported its first death from the virus in the small town of Vo, in the North-Eastern region of Veneto. It was believed there were around 150 reported cases in the country at this time, mainly spreading across Northern Italy (*it is important to note that in the early stages of COVID-19, there were limited methods of official testing and it is likely that estimated case numbers were much greater than those reported*). At this point, then Italian Prime Minister Giuseppe Conte implemented quarantines in 11 of the small towns that recorded these cases and large gatherings like carnival celebrations were cancelled. Nonetheless, cases continued to soar and amidst the overwhelming fatalities, the Government was forced to close schools, universities, restaurants, bars and factories in succession, as well as declare a nationwide lockdown on March 9th. Strict lockdown measures included social distancing, travel restrictions, closure of all non-essential businesses and industries and stay-at-home orders. Only supermarkets and pharmacies could remain open. Despite these measures, by the 19th of March Italy surpassed China as the country with the most COVID-19 related deaths. Just 7 weeks after the first confirmed cases in Rome, Italy’s cases totalled around 59,138, and the country went on to record 627 deaths on the 22nd of March alone, the largest single increase since the onset at the time [@lawler_2020_timeline].
+
+Within just four months of the alert to the WHO, global COVID-19 deaths had exceeded 100,000 and by the end of April Italy had sustained approximately 28$\%$ of these fatalities. Italian weekly deaths peaked (during the first-wave) at 5,339 on the week beginning the 30th of March [@worldhealthorganization_2021_world]. Over the subsequent months, global and Italian death counts continued to grow, and enormous burdens fell onto the Italian health system. Hospitals became overwhelmed and intensive-care units were overrun with COVID-19 patients requiring care such as ventilators and life-support machines. In many countries, healthcare systems felt the strain of an unprecedented amount patients requiring urgent care for a disease, of which there was little knowledge at the time. Limited supply of medical staff, medical equipment, Personal Protection Equipment (PPE), hospital beds and experience of the disease is sure to have exacerbated the mortality counts in many countries, just as in Italy. Not least by accounting for the indirect, negative externalities caused by the disease, such as the reduced admissions for non-COVID-19 related illnesses; various preventions of general-practice and outpatient activities to prevent virus transmission; and preoccupied emergency rooms and Intensive Care Units. All of which likely contributed to an increase in the non-COVID-19 mortality at the time. 
+
+As of the beginning of May 2021, 153.4 million cases of COVID-19 have been reported worldwide and Italy ranks 8th out of the 222 countries that have reported cases, with approximately 4 million reported cases [@johnhopkinsuniversity_2021_mortality]. Furthermore, of the 3.2 million global deaths, over 3.77$\%$ of them occurred in Italy (over 121,033 deaths) which places it 6th in country rankings [@johnhopkinsuniversity_2021_mortality]. COVID-19’s devastating impact on mortality in Italy relative to other countries can also be seen by its current position in the deaths per 100,000 of the population, in which it ranks 12th globally at 202.34 per 100,000. Astoundingly, annual mortality in Italy for 2020 is the highest ever recorded since 1945, when Italians fought in World War II on their own territory [@hopkins_2021_italy].
+
+The magnitude of this impact is likely due to numerous deterministic factors, for example Italy’s aging population of which 22.8$\%$ was made up over-65s in 2020, making them the second largest country globally for percentage of elderly that year [@worldhealthorganization_2021_world]. Given studies have shown a positive correlation between risk of death and age when contracting a virus, this factor likely made Italy’s population particularly vulnerable to the disease [@amante_2020_why]. Like other European countries, Italy experienced two significant ‘waves’ of the pandemic – it’s first during mid-February to July and second beginning in October until present. The majority of the first-wave in Italy of COVID-19 is the focus of my analysis, though it may be worth noting that most of the strictest lockdown measures were not released until early May, a period that is not considered in my project.
+
+## Italy
+
+This section provides context regarding Italy’s layout and how its different macro- and sub-areas are categorised. In my analysis, Italy is divided into five main macro-areas: ‘North-West’, ‘Lombardia’, ‘North-East’, ‘Centre’ and ‘South’, for the purpose of being able to look at maps and plots of the most affected regions and provinces in those five areas. Whilst it may seem like ‘North’, ‘South’, ‘East’, ‘West’ and ‘Centre’ would be more intuitive, the shape of Italy dictates the areas chosen, as can be seen on Figure 1 below. Furthermore, Lombardia is the largest and most densely populated region in Italy, which experienced the greatest number of cases during the first-wave of the virus, thus it was appropriate to treat it as an individual macro-area within the analysis. 
+
+```{r macroareas and regions, echo=FALSE,warning=FALSE,message=FALSE,error=FALSE}
+library(kableExtra)
+library(dplyr)
+
+northeast <- c("Veneto, Trentino-Alto Adige, Friuli Venezia Giulia, Emilia-Romagna")
+northwest <- c("Piemonte, Valle d'Aosta, Liguria")
+centre <- c("Lazio, Marche, Toscana, Umbria")
+south <- c("Abruzzo, Basilicata, Calabria, Campania, Molise, Puglia, Sardegna, Sicilia")
+lombardia <- c("Lombardia")
+nw <- c(5984864)
+ne <- c(11663606)
+c <- c(13578413)
+s <- c(18804886)
+lom <- c(10078365)
+
+region_table <- matrix(c(northeast,ne, northwest,nw, centre,c, lombardia, lom,south,s), byrow=FALSE, nrow=2)
+
+row.names(region_table) = c("Regions", "Total \n population")
+colnames(region_table) = c("North-East", "North-West", "Centre", "Lombardia", "South")
+
+region_final_table <- kable(region_table, caption = "The five macro-areas covering the whole Italian territory, the regions nested within them and total population of males and females in 2020.", align="c")
+
+region_final_table <- add_header_above(region_final_table, header=c(" "=1, "Macro-areas"=5))
+
+region_final_table = region_final_table %>%
+column_spec(2:6, width = "3cm")
+
+region_final_table = region_final_table %>% kable_styling(latex_options="hold_position") %>% kable_styling(latex_options="scale_down")
+
+
+region_final_table
+
+```
+
+Italy contains 20 regions within those five main macro-areas, these are depicted on the map below (note: all areas are reported using their Italian names e.g. ‘Lombardy’ is called ‘Lombardia’). Table 2 also presents each macro-area and the regions that are nested within them. Furthermore, within each region there are provinces and these total 107 across all of Italy’s regions. To an even smaller geographical unit, there are 7,904 municipalities within the provinces. For UK readers, this could be akin to Scotland, Northern Ireland, South-East etc. (regions) containing local authorities (provinces) that contain cities and towns (municipalities). 
+
+The different macro-areas had vastly different experiences with excess mortality during the first-wave, which will be explored in Section 6. 
+
+```{r Italian regions, dev="tikz", echo = FALSE, message=FALSE, fig.align='center', fig.cap='The entire Italian territory divided into its 20 regions.', out.height = "50%", out.width='70%', fig.pos='H'}
+knitr::include_graphics("./Italian_regions.pdf")
+```
+
+## Disease Mapping
+
+The aim of my analysis – to accurately estimate the excess mortality in Italy during a period of 2020 – requires exploration of the disease risk associated with COVID-19. Disease risk varies over time and location because of heterogeneity of environmental, social and numerous other factors. Thus, the ability to explain this variation is crucial for improving public health and social welfare. Studies that quantify these area-specific risks aid governments in allocating future health resources efficiently and alerting the public to specific risk factors. In the context of this project, accurately quantifying and controlling for the area- and time-specific risks of COVID-19 will provoke better estimations of the excess mortality that occurred because of the virus. 
+
+Precise assessment of excess mortality requires accurate estimation of the local relative risk, $\rho$, in different Italian areas and for those estimates to account for as small a geographical unit as possible, to explore local trends alongside the broader ones. This spawns a trade-off, since smaller areas implies smaller local sample sizes of observed data, by which to estimate the relative risk, implying less statistical precision of said estimates. This common dilemma in the mapping of disease incidence can be resolved with model-based methods, of which certain structures create a mechanism for improving local estimates by “borrowing strength” across areas, @waller_2010_disease describe this process as “resulting in the smoothing of extreme rates based on smaller local sample sizes”.
+
+Approaches outside of “disease mapping” typically apply non-spatial estimation, which involves borrowing information equally across areas and smoothing estimates towards a global mean, without accounting for their locations relative to each other. However, the category of methods that fall under “disease mapping” aim to generate area-specific estimates of disease risk and how they change over time, allowing for identification of high-risk subregions, and is the approach taken in this project. It accounts for the spatial setting by assuming positive correlations between observations, with more information ‘borrowed’ from areas which are closer and essentially smoothing local rates towards neighbouring values. Disease mapping studies have become popular when applied within a Bayesian framework due to their efficiency and flexibility, especially given advances in MCMC, INLA and other computer-based, estimation approaches. The Bayesian approach allows models to be updated as new data becomes available and for probabilistic inferences of the epidemiological data. Additionally, modern data visualisation tools can create results maps that provide rapid visual summaries of complex geographical information, which may be advantageous for spotting patterns that could be missed in graphical or tabular formats.
+
+@diggle_2001_overview states within the "analysis of spatial variation in disease risk...different formats of epidemiological data give rise to different statistical methods". As is the case in my project, ‘disease mapping’ commonly involves the use of a Poisson regression model as this distribution allows for things like case counts, death counts etc. of a particular disease. This was the method first proposed by @clayton_1987_empirical who employed a Poisson regression, within a Bayesian framework, to estimate age-standardised relative risks. Better yet, a Poisson model within a hierarchical framework (see Section 4.5) allows for the afore mentioned induction of positive spatial correlation across disease relative risks - and consequently disease rates - through the inclusion of structures like CAR or BYM (explored later in Section 4.7). This results in model-based estimations of the covariate effects in a spatially correlated context; predictions of ‘missing data’ which stems from lack of complete information or misreporting; and spatio-temporal covariance structures [@waller_2010_disease].
+
+The following sections will dive into the general specifications of disease mapping models in a Bayesian framework, and will provide explanations for structures that are used in this project. 
+
+## Bayesian Inference
+
+The fundamental theorem that underpins all the approaches to Bayesian statistics is, of course, Bayes’ theorem:
+
+\begin{equation} p(\theta |y)\ = {p(y|\theta )p(\theta )\over p(y)} = {p(y|\theta )p(\theta ) \over \int_{\Theta} p(y|\theta )p(\theta)  d\theta} .\end{equation}
+ 
+Assume we have some observed data $\boldsymbol{y}=(y_1,\ldots,y_n)'$ and some unknown parameter(s) $\boldsymbol{\theta}$. The theorem above provides us with a way to make probability statements about $\boldsymbol{\theta}$ given the data available to us, $\boldsymbol{y}$, from its probability density function $p(\theta|y)$ – the posterior distribution, which represents the uncertainty about $\boldsymbol{\theta}$ after conditioning on the data. The distributions on the right-hand-side of the above formula are:      
+- $p(y|\theta)$ – the sampling distribution describes the variability in the observed data, $\boldsymbol{y}$, given the values of the parameters, $\boldsymbol{\theta}$.   
+- $p(\theta)$ – the prior distribution which represents the uncertainty about the values of $\boldsymbol{\theta}$ before accounting for any of the observed data.    
+- $p(y)$ – the marginal distribution of the data, $\boldsymbol{y}$. This denominator acts as a normalising constant to allow the posterior distribution to be a valid probability distribution. 
+
+Unlike in the Frequentist perspective, Bayesian statistics is such that both the data and the parameters have probability distributions, implying an ‘uncertainty’ in these random parameters and from which inferences can be made about the probabilities of unobservable parameters, as well as observable events. Bayes’ theorem unifies the observed empirical data and the prior beliefs of the statistician (in the form of the prior distributions of the parameters) to obtain a posterior distribution of the parameters. The huge advantage of this is the ease at which new information can be incorporated into the theorem, resulting in a re-evaluation of the prior information, and leading to new inferences about the properties of the stochastic system, all of which occurs with every inclusion of new information. As observed data is updated, it has a knock-on effect within the Bayes’ equation and results in the posterior probability distribution adjusting after accounting for this new information, along with the prior beliefs. An advantage of the Bayesian approach that is exploited in this project, is how probability represents a degree of reasonable belief rather than a frequency (Frequentist view), allowing computed probabilities to be associated with the degrees of confidence about the observed events in question.
+
+A notable characteristic of Bayesian inference is the degree of ‘subjectivity’ that is involved with choosing the prior distribution. The statistician or researcher can reflect some prior knowledge they have about topic at hand, that is not based on the data available. Given that the choice of prior influences the posterior distribution obtained (and thus the inferences made), it is crucial that in situations where there is little-to-no expert knowledge on the subject matter, non-informative priors are used. Non-informative priors have extremely large uncertainty, imposing as little information as possible on the sampling distribution and indicating that we do not want our analysis to be influenced by our prior beliefs. Given I have no previous experience with examining mortality rates and little prior knowledge of the time period in question, my model uses the minimally informative hyperpriors mentioned in Section 3.3: $\mbox{logGamma}(1,0.1)$ and $\mbox{Normal}(0,10^6)$ [@gelman_2013_bayesian]. These distributions are relatively vague and, while they include some information, the main effect of them is to stabilise the inference that is mainly driven by my observed data, given its large sample size. 
+
+Another extremely useful part of Bayesian statistics is the posterior predictive distribution, which can be used to make predictions about future values of the data, $\tilde{y}$. If one assumes that future values of the data, $\tilde{y}$, are of the same nature as the observed data, $\boldsymbol{y}$, which implies they are both generated by the same process, therefore exchangeable. Then, using the marginal distribution of the data stated in the denominator above, and applying the same rules of conditional probability, one can predict unknown values of the data:
+
+\begin{equation} p(\tilde{y}|y)= \int_{\Theta} p(\tilde{y},\theta|y)d\theta= \int_{\Theta} p(\tilde{y}|\theta,y)p(\theta|y)d\theta= \int_{\Theta} p(\tilde{y}|\theta)p(\theta|y)d\theta .\end{equation}
+Since this project focuses on the **excess** deaths in Italy, the most fundamental part of the analysis relies on the predictions of what the number of weekly deaths in 2020 in a ‘normal’ year (in the absence of the COVID-19 pandemic) would have been. The model samples from the posterior predictive distribution to obtain predictions of the mortality count in every province and region for each week of 2020, in Italy. This has the form
+
+\begin{equation} p(\tilde{y}_{ijt5}|y)=\int_{\Theta} p(\tilde{y}_{ijt5}|\theta)p(\theta| y)d\theta ,\end{equation}
+
+where $\boldsymbol{\theta}=(\beta_{0k},\upsilon_i,\nu_i,\omega_{jt},f(x_{it}))$ is the vector of model parameters. 
+
+Here, $\tilde{y}_{ijt5}$ is the predicted number of fatalities in province $i$ within region $j$, on week $t$ of 2020 (the 5-th year in our time-series). The empirical data, $\boldsymbol{y} =(y_{ijt1},y_{ijt2},y_{ijt3},y_{ijt4})$, incorporated into attaining the predictions are the Italian mortality data from the previous four years, and, as such, the predictions of death counts obtained for 2020 will reflect a ‘normal’ year and not one in which an extreme event has occurred e.g. a substantial, global pandemic. The uncertainty of the estimates of these parameters given the observed data, $\boldsymbol{y}$, is averaged out through the integration above.
+
+## Hierarchical Models
+
+As mentioned in Section 4.3, this project uses a hierarchical framework. Hierarchical modelling provides a compromise between the two avenues of Bayesian analysis: the first uses priors with minimal information about the unknown parameters to allow the data to determine the posterior distribution. The second used priors that incorporate the person’s belief about the unknown parameters, which can result in different posterior distributions for identical data as beliefs may vary between individuals. A hierarchical model allows the use of a prior based on previous data, thereby developing a prior that is specific to the data being analysed.
+
+In real-world settings, it is common for observations of a certain variable to have a natural hierarchy, in which single observations belong to different groups that all belong in one larger group. This structure may have several levels and it is unrealistic to assume that independence of observations holds at each level. A hierarchical framework has the advantage of allowing the data to model the intensity of dependency between the groups, which are considered a sample from a common population distribution. The proximity of the sampling distribution parameters to the global mean is established by using the data to estimate the population variance [@tolonen_2019_chapter].
+
+For this project’s hierarchical framework, the observed data are the Italian mortality data from 2016-2019, $\boldsymbol{y}=(y_{ijt1},y_{ijt2},y_{ijt3},y_{ijt4})'$, which follows a $p(y|\theta)$ distribution. Hence, an estimate of $\boldsymbol{\theta}$ is needed to estimate future mortality. As previously stated, $\boldsymbol{\theta}=(\beta_{0k},\upsilon_i,\nu_i,\omega_{jt},f(x_{it}))$, and various prior distributions are allocated to each of these parameters, which are stated in Section 3.3. In turn, each of these prior distributions has one (or more) of its own hyperparameters, $\boldsymbol{\zeta}=(\tau_{\upsilon},\tau_{\nu},\tau_x,\tau_{\omega})'$, which each follow certain hyper-distributions. Though in the case of this model, the hyperparameters follow a common distribution. 
+
+A hierarchical structure models the overall marginal distribution of $y_{ijtk}$ in two stages. Firstly, the observed data are assumed to be conditionally independent given the values of $\boldsymbol{\theta}$. 
+
+\begin{equation}y_{ijtk}|\theta \sim \mbox{Poisson}(E_{ijtk}\rho_{ijtk}) .\end{equation}
+But for the second stage, in which the distribution for $\boldsymbol{\theta}$ are considered, the model allows for induction of extra variability in the marginal distribution of $y_{ijtk}$ and has the form  
+
+\begin{equation}\log(\rho_{ijtk})=\beta_{0k}+\upsilon_i+\nu_i+\omega_{jt}+f(x_{it}) .\end{equation}
+The conditional distribution of the prior parameters also assumes conditional independence given the values of the hyperparameters, $\zeta$, 
+\begin{equation}\theta_{ijtk}|\zeta \sim p(\theta_{ijtk}|\zeta) ,\end{equation}
+\begin{equation}\zeta \sim p(\zeta) .\end{equation}
+Essentially, the former stage determines the sampling distribution, $p(y|\theta)$, the second determines the set of prior distributions for the spatially correlated random effects and the final determines the distributions of the hyperparameters. Here $E_{ijtk}$ is defined as the expected number of events (in this case mortality) in the absence of covariate effects. Often, it is calculated by the product of the population, in province $i$ and region $j$, and the risk per individual. The individual-level risk for this study is calculated by determining the observed mortality rates per age bracket for the 2016-2019 data and multiplying these rates with the corresponding age brackets within the population data for the whole study period (2016-2020). $E_{ijkt}$ acts as an offset to the model-based expected observation counts by adjusting for the uneven distribution of the population across Italy, resulting in area-specific relative risks, $E_{ijtk}\rho_{ijtk}$, on which the mortality counts are distributed [@gmezrubio_2020_chapter]. 
+
+A hierarchical composition has the advantage of allowing for a variety of structures to be included within the spatially correlated random effects - like region-specific fixed-effect covariates, autoregressive structures or random walks - to induce marginal correlations amongst the $y_{ijtk}$. Furthermore, the two-stage process preserves the conditional independence of mortality observations, $p(y|\theta)$, whilst still allowing for spatio-temporal random effects within the second stage. This additional stage accounts for the correlations amongst local relative risks, $\rho_{ijtk}$, using the distribution of the random effects and then transforms the estimation of said relative risks to the estimation of the $\boldsymbol{\theta}$ parameters [@waller_2010_disease2]. 
+
+The random effects, $\boldsymbol{\theta}$, are estimable using the fairly, non-informative priors that are associated to them. A crucial feature of the hierarchical model is the implicit conditional independence assumption which suggests the data only depend on the hyperparameters through the population level parameters:
+			\begin{equation}y \perp \!\!\! \perp \zeta|\theta \implies p(y|\theta,\zeta)=p(y|\theta) ,\end{equation}
+which results in the full posterior distribution of the form:
+		\begin{equation}p(\theta,\zeta|y) \propto p(\theta,\zeta)p(y|\theta,\zeta)
+					\propto p(\zeta)p(\theta|\zeta)p(y|\theta)
+					\propto p(\zeta)p(\theta|\zeta)p(y|\theta) .\end{equation}
+This posterior is incorporated into the posterior predictive equation (see equation 7) from Section 4.4, to produce model-based estimates of death count in 2020.
+
+## Spatio-temporal Models
+
+The general framework within spatio-temporal models assumes a study area that is separated into $I$ regions and a study period that is divided into $T$ time periods, when examining observations of a variable $\boldsymbol{y}$, which for disease-mapping typically represents fatality count. In this project, the study area is categorised by two spatial categories, region and province. Hence, it is indexed by $i=1,…,107$ for the province and $j=1,…,20$ for the region in question. Similarly, the unit of time dividing the study period is made up of two categories, the week and year. Thus, $t=1,…,17$ and $k=1,…,5$ indexes which of the first 17 weeks and on which year from 2016-2020, is being looked at. Some studies may also model by certain characteristics, for example gender or race, indexing these individuals by $l=1,…,L$ for the number of different categories. Additionally, to denote the number of people at risk and number of deaths - in area $i,j$ at time $t,k$ – we use $n_{ijtk}$ and $y_{ijtk}$ respectively. Theoretically, it is assumed these observations, $y_{ijtk}$, are conditionally independent and a paper by @lpezqulez_2009_pdf submits that, whilst they are usually assumed to be exponentially distributed, a “Poisson distribution will be preferred when the observation values in each region and period are expected to be low”. Either way, $y_{ijtk}$  (the number of mortalities in a certain province and region at a specific time) depends on a product of the number of people at risk in that province and region and the risk within that area at that time, $n_{ijtk}r_{ijtk}$.
+
+As discussed in the previous section, internal standardization is often performed by age on the number of people at risk, $n_{ijtk}$, to obtain the expected number of cases, $E_{ijtk}$. As well as modelling the relative risk, $\rho_{ijtk}$, instead of $r_{ijtk}$. Intuitively then, a Poisson distribution seems desirable for models looking at disease mortality, since it implies $E[y|\theta] = E_{ijtk}\rho_{ijtk}$. That is, the conditional expectation of the number of mortalities in area $i,j$ at time $t,k$ is equal to the product of the expected number of cases and the relative risk, in that area at that time. 
+
+Regardless of the distribution chosen at stage one of the hierarchical model, spatio-temporal modelling is more concerned with the structures that can be included at stage two of the model design – the linear predictor (equation 1). This equation is typically the sum of a variety of (assumed) independent and individual effects that contribute to the relative risk, $\rho_{ijtk}$, in that province and region, on week $t$ of year $k$. The next section looks at the different types of structures that can be included within the above terms, to account for the different spatial, temporal and interaction effects. It primarily focuses, in depth, on those which have been included in the final model of this project.
+
+## Structures of Effects
+
+Before discussing the various spatial, temporal and interaction effects that can be included in the linear predictor, first a note on covariate effects. These could be factors such as temperature, age, or pollution level. Typically, (as is the case in this project) disease mapping models are standardised by age. However, age could be included as an additional categorical covariate, $A_l$, with $l=(1,..,L)$ categories for each age bracket, acting as an unstructured random effect or fixed effect. 
+
+### Spatial Effects
+
+The disease mapping approach takes advantage of the flexibility of the linear predictor, by accounting for spatial effects as random effects, within the prior distribution. Unlike with Frequentist, this assures more accurate estimates of the spatial effects across different regions. This approach can impose two types of variation – spatially unstructured variation called heterogeneity and/or spatially structured variation called clustering – depending on the classification of structure chosen for the linear predictor [@lpezqulez_2009_pdf].
+
+#### Besag-York-Mollie Specification
+
+
+There are structures that model only the heterogeneity effect or the clustering effect. For example, the Gaussian Conditionally Autoregressive (CAR) distribution accounts for the latter by allowing the mean of the structured effect to depend on means of neighbouring areas. CAR specifications for were first introduced by @besag_1974_spatial and have since been used in papers like @hodges_2003_on. The choice of which type of variation should be included in the model depends on prior beliefs about the scope of risk factors of the study region. However, given this project looks at the entire Italian region it would be preferable to choose a structure that accounts for both effects – the Besag-York-Mollie (BYM) specification proposed by @besag_1991_bayesian does just that. It takes the form
+	\begin{equation}\upsilon_i +\nu_i ,\end{equation}	
+	where $\upsilon|\lambda_{\upsilon} \sim \mbox{CAR}(\lambda_{\upsilon})$ and $\upsilon=(\upsilon_1,...,\upsilon_I)$ and $\nu_i \sim \mbox{Normal}(0,\lambda_{\nu})$.
+
+A BYM structure controls for the spatial correlation between data points. Especially in epidemiological studies, it's probable that observations are more similar to those closer to them. Hence, the BYM treats the risk associated in an area $i$, as the sum of the clustering effects, $\upsilon_i$, and the heterogeneity effects, $\nu_i$. The former smoothes the data according to its geographical structure, and the latter is an unstructured random effect for modelling the uncorrelated noise [@gmezrubio_2020_chapter].
+
+Other papers like @scortichini_2020_excess mention use of estimating “the excess risk in mortality during the COVID-19 outbreak was defined through a constrained quadratic B-spline”. Two-dimensional splines, penalized splines, and combinations of these with CAR models make up some of the other approaches taken for smoothing of data, when modelling spatial effects @eilers_1996_flexible. Nonetheless, these structures are not included in the final model, so will not be discussed any further. 
+
+### Temporal Effects
+
+In the context of disease mapping, which examines the evolution cases and mortality over a certain study period, it is typical to choose a temporal structure that allows for flexible yet smooth patterns. As mentioned in the previous section regarding spatial effects, splines can also be used for the temporal effects. However, this project focuses on random walks and autoregressive structures, as these are chosen for the final model. 
+
+#### Autoregressive Structures
+
+
+An important difference between cross-sectional data and data in time-series, is that data moves as a sequence of random variables called a stochastic process, in which observations display some form of dependence. A way to model these trends are finite distributed lag models (FDLM) [@pynnonen_2020_regression]. These include lagged explanatory variables appearing as regressors, where the order number of the model explains the number of lags. FDLM require assumptions such as stationarity and weak dependence in order for estimates to be valid. Stationarity is held if, for a stochastic process $\{x_t: t=1,2,...\}$, every collection of time indices $1\le t_1\le t_2\le\ ...\ \le t_m$, the joint distribution of $(x_{t_1},x_{t_2},...,x_{t_m})$ is the same as the joint distribution of $(x_{t_1+k},x_{t_2+k},...,x_{t_m+k})$ for all $k\geq1$. In other words, homogeneity of the distribution of the outcomes over time. This assumption can be weakened, so that the mean and variance remain constant across time periods. An example used in this project is the auto regressive (AR) model, below shows the form of the AR(1) model:
+				\begin{equation}x_t =\rho_0 + \rho_1x_{t-1}+ u_t ,\end{equation} 	where $t=1,2,...$
+
+For stationarity to hold it must be that $|\rho_1|<1$. Also, $u_t$ are independently and identically distributed, where $u_t \sim \mbox{Normal}(0,\sigma^2)$. The AR(1) model essentially implies that the value of the variable $x$ in period $t$, depends on its value in the previous period, hence it contains one lag. 
+
+#### Random Walks
+
+
+Random walks (RW) are an example of a highly persistent time series and are a special case of the AR model, where the slope parameter above is such that $\rho_1=1$. As a result, random walks do not have stationarity and the sample’s autocovariance function decays slower, suggesting past values have a prolonged impact on the current value compared to AR. Furthermore, random walks assume that the initial value of the regressand, $x_0$ is independent of $u_t$. A generalization of an RW is the ‘unit root process’ that includes a constant term, $\rho_0$, allowing the error term to be dependent. 
+
+### Interaction Effects
+
+Unsurprisingly, spatio-temporal interaction effects are a crucial part of spatio-temporal models and there is a vast number of possibilities for structures that explain these. A paper by @anderson_2017_a discusses and compares the different options in depth. 
+
+Advantageously, the choice of BYM specification (discussed in Section 3.3) removes the complications of deciding on an interaction term, since it automatically creates one. The BYM is made up of independent, unobserved covariates for every single combination of area and period within the study. Furthermore, @lpezqulez_2009_pdf state that “if spatial and temporal main effects are present in the model, then this interaction effect only implies independence in the deviations from them”. 
+
+## INLA and Monte Carlo Simulation
+
+*“For most probabilistic models of practical interest, exact inference is intractable, and so we have to resort to some form of approximation.”*
+\begin{flushright}
+Page 523, Pattern Recognition and Machine Learning, 2006.
+\end{flushright}
+-------------------------------------------------------------------------
+
+There can often be instances where the posterior, $p(\theta|y)$, is a highly multivariate distribution and a closed form solution does not exist for the model in question, because the marginal distribution, $p(y)$, is difficult to estimate. When this is the case, other computational methods are available for estimating, or taking samples from, the posterior distribution. In general, these computational methods focus on estimating the integrals that appear in Bayesian inference.
+
+The method for approximating the posterior distribution of this model is called Integrated Nested Laplace Approximation (INLA) and is implemented using the software R-INLA [@inla]. INLA is an algorithm for approximate Bayesian inference in latent Gaussian models that aims to estimate the individual posterior marginals of the model parameters, $p(\theta_i|y)$, rather than trying to estimate the joint posterior distribution of all those parameters. This is because marginal inference is sufficient for inference of the parameters and latent effects of the model, as well as being easier to obtain. Consider a vector of observations, i.e. the data, $\boldsymbol{y}$, which in my project represents the mortality data in Italy for previous years. In general, the mean $\mu_{ijtk}$ of an observation $y_{ijtk}$ is linked to the linear predictor of the model. As stated in Section 3.3, the linear predictor of the final model takes the form
+		\begin{equation}\eta_{ijtk}=\log(\rho_{ijtk})=\beta_{0k}+\upsilon_i+\nu_i+\omega_{jt}+f(x_{it}) ,\end{equation}
+which is the ‘latent model’ and describes how the latent field behaves. The latent effects of the model are $\boldsymbol{z}=(\eta_{ijtk},\beta_{0k},\upsilon_i,\nu_i,\omega_{jt},f(x_{it}))'$, where the distributions of these latent effects are jointly Gaussian and depend on a vector of hyperparameters. Let $z$ denote all latent Gaussian parameters and $\boldsymbol{\theta}=(\theta_1,\theta_2)'$ denote all latent non-Gaussian parameters, contained in $y|E\rho$ and $z$ respectively.
+
+@heaukulani_2013_inla outline the key stages of INLA as:   
+
+- Laplace approximation of the marginal posteriors $\pi(z_i|y)$ and $\pi(\theta_i|y)$.   
+- Laplace approximation of $\pi(z_i|\theta,y)$.   
+- Integrated and nested approximation of the step (1) distributions to marginalize $\boldsymbol{\theta}$.
+
+A full derivation of the joint posterior distribution of the latent effects and hyperparameters can be found at @gmezrubio_2020_chapter. A detailed explanation of the Laplace approximation INLA carries out can be found in [@markov_2014_spatial]. Using INLA, samples can be drawn from the approximated joint posterior distribution of the latent effects and hyperparameters. For example, the results for this model are based off of 1,000 samples of $\log(\rho)$, the stage one linear predictor, for each province and region in every week of 2020.  
+
+An assumption of the INLA method, that the observations are independent given the latent effects and $\theta_1$, means the sampling distribution is equivalent to the product of the conditional marginal distributions of the observations. Hence, INLA uses the Taylor/Laplace approximation along with integration to compute the marginal posteriors, rather than the full joint posterior. An advantage of this method is that errors from Taylor expansion tend to be smaller than McMC errors. Thus, in general, it produces more accurate parameter estimates in a shorter computational time as it does not require iterative computation, unlike alternative methods such as Markov chain Monte Carlo which uses Gibbs sampling or Metropolis-Hastings. Additionally, having chosen appropriate arguments, INLA instantly returns the deviance information criterion and other model testing values without need for manual computation [@schrdle_2010_spatiotemporal]. However, INLA can only be implemented with models that can be expressed as latent Gaussian Markov random fields (GMRF) [@lpezqulez_2009_pdf]. Fortunately, my model’s specification falls into this class, along with a variety of other commonly used models. 
+
+## Model Testing
+
+As previously stated, the full hierarchical model is of the form
+			\begin{equation}p(y,\theta,\zeta) = p(y|\theta)p(\theta|\zeta)p(\zeta) ,\end{equation}
+where the prior, $p(\theta)=\int_{\zeta}p(\theta|\zeta)p(\zeta)d\zeta$, combines with the sampling distribution $p(y|\theta)$. Or the prior is $p(\zeta)$ relates with sampling distribution, $p(y|\zeta)=\int_{\Theta}p(y|\theta)p(\theta|\zeta)d\zeta$. Either combination produces the marginal distribution of $\boldsymbol{y}$, though the method chosen will impact the number of parameters for the model, thus effecting its complexity. It is reasonable, then, that methods of assessing and comparing this complexity have been developed that adjust for differing effective size. These will be described in the following sections.
+
+### Deviance Information Criterion
+
+A measure used for model comparison called the deviance information criterion (DIC) is defined as follows:
+				\begin{equation}DIC=-2\log(p(y|\hat{\theta}_{Bayes})) +2p_D .\end{equation}
+In equation 18, the first term quantifies the Bayesian measure of fit and the second term penalises any additional complexity. From this it follows that smaller values of DIC imply a ‘better’ model. Assuming we have a model of the form seen in Section 3.3, then let
+\begin{equation}p_D = 2(\log(p(y|\hat{\theta}_{Bayes}))-E_{post}[\log(p(y|\theta))] ,\end{equation}
+where $\hat{\theta}_{Bayes}=E[\theta|y]$ is a point estimate (usually the posterior mean) [@gelman_2013_understanding]. 
+
+Here, $p_D$ represents the effective number of parameters of the model. The value of $p_D$ allows different model specifications, modelling the same data and with identical hyperpriors, to be compared in terms of their ‘complexity’. As stated in @spiegelhalter_2002_bayesian, it essentially assesses “the posterior estimate of the gain in information provided by the data about $\boldsymbol{\theta}$, minus the plug-in estimate of the gain in information”. A limitation of this measure comes down how the choice of the estimator, $\hat{\theta}_{Bayes}$ might affect the validity of the values obtained. Both $p_D$ and DIC have been used for numerous applications, such as the hidden Markov models @green_2002_hidden employ for disease mapping. Note that an alternative estimate for $p_D$, called $p_{Dalt}$ can also be used, which has the advantage of always being positive but the flaw of being less stable.
+
+Let us consider why DIC is chosen in this project over the other available information criterion measures like AIC or BIC. In a hierarchical setting, each measure is essentially answering a different prediction problem. Suppose the three levels of our model concerns individuals within regions within a country. Then:    
+- If we want to predict results of future individuals in those actual regions, DIC is most appropriate - the random effects themselves are of interest.    
+- If we want to predict results of future regions in that country, then marginal-likelihood methods such as AIC are appropriate - the population parameters are of interest.   
+- If we want to predict results for a new country, then BIC/ Bayes factors are appropriate - the ‘true’ underlying model is of interest [@dic].
+
+Thus, because the aim of this project includes mortality prediction of individuals DIC is chosen and, typically, differences in DIC values of approximately 3-5 are considered ‘significant’ when comparing a series of models [@model].
+
+### Watanabe-Akaike Information Criterion
+
+Another method for estimating the prediction accuracy of a fitted Bayesian model is known as the Watanabe-Akaike information criterion (WAIC). It does so, by evaluating the log pointwise posterior predictive density and, like DIC, it adjusts for ‘overfitting’ by estimating the effective number of parameters, $p_{WAIC}$. Usually, WAIC is not used as it involves additional computation compared to measures like DIC. However, an advantage of the R package INLA is its ability to produce DIC and WAIC values, without further calculation, given the appropriate commands. 
+
+Continuing from the general model in the previous sections, the form of the WAIC is as follows. The number of effective parameters for WAIC has the form
+ \begin{equation}p_{WAIC}=2\sum^n_{i=1}\{\log(E_{post}[p(y_i|\theta)\}-E_{post}[\log(p(y_i|\theta))] .\end{equation}
+Again, there exists an adjusted version, $p_{WAICalt}$. More information on this can be found in papers like @gelman_2013_understanding . As a result, the formula for WAIC is
+\begin{equation}WAIC=\log(\prod^{n}_{i=1}p(\theta|y))-p_{WAIC} ,\end{equation}
+where $\theta^s$, where $s=1,...,S$, are the posterior simulations (note that equation 21 is scaled to be comparable with equation 18 for DIC).
+
+Notably, @vehtari_2016_practical argue that WAIC “can be viewed as an improvement on the deviance information criterion (DIC) for Bayesian models”, since WAIC is “fully Bayesian”. It averages over the entire posterior distribution and does not rely on point estimates like DIC, which is particularly important in a predictive model. Likewise, in the case the model’s posterior distribution cannot be approximated by any normal distribution, WAIC is still applicable whereas DIC is not. The consequence of using both measures to compare model iterations within this project, is a more exhaustive assessment.
+\newpage
+
+# Methods
+
+## Data
+
+The population of interest in this analysis is the entire population of individuals living in Italy during the study period, across all regions. The mortality dataset used are the official daily mortality data from the Italian Institute of Statistics [@a2020_information], which states it is the "main producer of official statistics in the service of citizens and policy-makers" on its website. The raw data are aggregated by sex, age, municipality, days and years and the death counts are recorded for all 7,904 municipalities, giving a comprehensive dataset to work with. The sample taken from the available ISTAT data is from 2016-2020 so as to build a model with a large amount of data, but without the expense of too much processing time. Moreover, 2015 had notably higher mortality due to a bad year for flu and, arguably, using data from too long in the past may not be indicative of current trends in mortality. 
+
+Before it could be used in the model, the data were organised into weekly mortality and stratified into specific age brackets that correspond with the brackets used when calculating the age-specific rates – 0-14, 15-24, 25-34, 35-44, 45-54, 55-64, 65-74, 75+. 
+
+The portion of the sample data covering 2016-2019 were used within the model to estimate the posterior predictive distribution from which to make simulations of deaths in 2020 from, whereas the observed data from 2020 were used to compare with these predictions. For the weeks of 2020 covered in my analysis, the data are available for all 107 provinces.
+
+Additionally, the sample data used for allowing the model to control for seasonal fluctuations in mortality rates ($f(x_{it})$) was retrieved from the Copernicus ERA5 global weather and climate reanalysis dataset [@copernicus]. This compromised of daily air temperature data measured from a 2-meter height. The raw dataset contains a combination of modelled and observational data to produce global hourly data at a 30km grid resolution. As before, this was manipulated to weekly air temperature for each Italian municipality using the Google Earth Engine cloud-based platform and further aggregated by province, for the purpose of my model. The method by which this aggregation was performed is detailed in later sections.
+
+## Overview of Analysis Design
+
+As previously stated in Section 3.3, the general structure of this hierarchical model can be broken into 2 levels, the second of which estimates the relative risk, $\rho_{ijtk}$, in each province and region for each week of 2020 using a linear predictor (equation 1) that contains structures to account for the spatial, temporal and temperature effects. Each combination of province and week of 2020 has 1,000 simulations for its relative risk, produced by INLA (see Section 4.8), that are then combined with their corresponding age-specific mortality rates, $E_{ijtk}$, to provide a matrix of the estimated parameters of the first-stage distribution, $E_{ijtk}\rho_{ijtk}$. The second stage uses the matrix of parameters, for each province and region in each week of 2020, within the first-stage Poisson distribution to estimate the mortality count for that area and week in 2020, resulting in a $p \times q$ matrix of predicted death counts, $\boldsymbol{Y_{pq}}$. Here the number of rows, $p=i\times w =107 \times 17=1819$, is each combination of the 107 provinces and 17 weeks and the number of columns, $q=1000$, is each of the 1,000 predicted death counts for each combination. This matrix of predicted death counts can then be manipulated, for example by computing the posterior mean, median, standard deviation etc. of the predicted death count for each province and week. Or, for a given row, the observed death count could be subtracted from each predicted death count to produce a matrix of 1,000 predicted excess death counts for each combination of province and week in 2020. A similar method is applied for the excess mortality rate, except with the additional step of dividing each excess death count by its corresponding observed death count.
+
+The process described above was consistent for all versions of the model. However, adjustments were made to structures within the linear predictor (equation 1) for each model iteration. These adjustments would produce different model simulations in the first stage, having a knock-on effect to the final matrix of mortality count predictions.
+
+The following section explores the adjustments made to initial model versions and the reasons why they were made, as well as some common model features. Moreover, it ties together the structures introduced in Section 4 and provides justifications for why they are included in the final model. 
+
+## Model Specification Versions
+
+Regarding the model specification, several iterations of the linear predictor (equation 1) were trialled during the model building process. A general form of the linear predictor is as follows
+\begin{equation}\log(\rho_{ijtk})=\beta_{ok}+C_{ijtk}+ S_{ijtk}+\omega_{jt}+f(x_{it})+\epsilon_{ijtk} ,\end{equation}
+where the definitions for $\beta_{ok}$, $\omega_{jt}$ and $\epsilon_{ijtk}$ can be found in Section 3.3 and are consistent amongst all versions of the model. This section focuses on adjustments made to the $C_{ijtk}$, $S_{ijtk}$ and $f(x_{it})$ structures. 
+
+In the initial model, $S_{ijtk}$ represents a simple region effect to account for the clustering of provinces within regions as discussed in Section 4.7. This ‘initial model’ also includes a covariate for sex, represented in equation 22 by $C_{ijtk}$. After consolidation of the results from this model and further exploration of the observed data, there is arguably both theoretical and empirical evidence to suggest that, during this first-wave, the mortality rates differ by sex. More specifically, there is much higher excess mortality in men than women and this was reported at the time [@schumaker_2020_covid19], as well as shown by the model which estimates approximately 17.1$\%$ more excess mortality for males across all the Italian regions. This indicates justification for modelling the two sexes separately, as opposed to controlling for them within the linear predictor, to better distinguish this specific effect. By simply controlling for gender within the linear predictor, one assumes that the patterns in mortality for male and females are constant across areas. In reality, this is unlikely to be the case as other latent factors exist that cause differential mortality in men and women, e.g. hormonal composition, and consequently modelling them together assumes no differences in these latent effects. Modelling sex separately does not make this assumption and allows for a better look at the evolution of geographical gender differences in mortality, over time.
+
+As a result, the next version of the model is almost identical apart from containing no sex variable, and its linear predictor has the form
+\begin{equation}\log(\rho_{ijtk})=\beta_{0k}+S_i{jtk}+\omega_{jt}+f(x_{it})+\epsilon_{ijtk} .\end{equation}
+*Note: for this ‘gender separate model’ (and all successive model versions), the observed data for men and women are modelled separately.*
+
+The next aspect of the model taken into consideration is the method by which the observed temperature data is aggregated at level of province. As mentioned at the end of Section 5.1, the original temperature data are for each Italian municipality. However, for the purpose of using it within the $f(x_{it})$ structure the data are organised to the level of province. The two obvious methods for this aggregation are the median and mean of the temperatures for the municipalities contained in each province. For the ‘initial model’ and ‘gender separate model’, the temperature for province $i$ on week $t$ is the median temperature for all municipalities nested in said province, for that week. The median is less sensitive to outlier temperatures which might skew the estimates; however, this does not necessitate it’s use. Therefore, the next iteration of the model is almost entirely identical to the ‘gender separate model’, apart from the method of aggregation for province-level temperatures – using the mean of the municipalities rather than median. 
+
+After some model testing (to be discussed in Section 7.3), the ‘final model’ reverts to use of the median for determining province-level temperatures. Furthermore, the random spatial effect, $S_{itk}$, is updated to the more complex BYM spatial structure, $S_{itk}=\upsilon_i+\nu_i$, described in Section 4.7. The prior distributions for each part of this structure are stated in Section 3.3. Within this structure, the risk associated with a province $i$ is broken down into the sum of a heterogeneity and clustering effect. The former, $\nu_i$, accounts for the spatially unstructured effect between provinces and the latter, $\upsilon_i$, accounts for the spatially structured effect through a CAR distribution which allows the mean of $\upsilon_i$ to depend on neighbouring provinces. Additionally, BYM uses spatial and non-spatial error terms which represent the over-dispersion, not modelled by the Poisson outcomes, and account for the remaining variance not entirely explained by the spatial structure of the data.
+
+Consideration was given for the inclusion of an interaction term, nevertheless the BYM specification contains an additional heterogeneity spatial term and, consequently, produces a Type I spatio-temporal interaction term [@knorrheld_2000_bayesian]. This type of interaction assumes independent unobserved covariates for each combination of province $i$ and week $t$ and can represent circumstances that cause a slight increase or decrease in the rates of a specific province-week, by allowing for random and independent oscillations around the expected rates. Therefore, no further interactions are necessary, as it would likely cause over modelling of the data. This occurs when many of the estimated parameters conflict with each other as they attempt to explain the same thing, simply creating more ‘noise’ in the model and leading to greater uncertainties in estimations and predictions.
+
+A common feature of all the model versions is the observed data used are the weekly Italian mortality data from 2016-2019 at the resolution of province. Secondly, air temperature is accounted for with $f(x_{it})$ and this acts as a proxy for weather changes across seasons, which arguably have an impact on trends in mortality rates. In fact, numerous research papers provide evidence for non-linear effects of temperature on morality [@gasparrini_2017_projections ; @gasparrini_2015_mortality] hence the model includes a RW2 structure to create a smoothing effect across weekly temperatures at province level. As discussed in Section 4.7, this structure (see equation 4) imposes the assumption that the temperature of each week is affected by the previous two weeks. Intuitively, in estimating the temperature of week t, more weight is placed on the temperature from the most recent week $(t-1)$, and less on the week before the previous $(t-2)$. 
+
+To capture the temporal trends all model versions include a year-specific random intercept, $\beta_{0k}$, to account for the long-term patterns and a weekly smoothing effect, $\omega_{jt}$, which accounts for any non-linearity in mortality relative risks with a RW1 structure (see equation 3). In the context of this project, this structure assumes that the value of mortality in region $j$ on each week depends on the value from the week prior. Moreover, to explain how this temporal smoothing effect changes across space, the model allows it to differ for each region, as can be seen from the indices, with a common precision $\tau_{\omega}$. Lastly, all model versions have the age structure of the population adjusted for using internal standardisation, at province level and across weeks, as discussed in Sections 3.3 and 4.5. 
+
+For each model version, the specified formula for $\log(\rho_{ijtk})$ is estimated with INLA, using the R-INLA package in R. The full ‘final model’ specification is outlined in Section 3.3 and all results, inferences, and graphs stem from the predictions of this model, which are discussed in the subsequent section.
+
+## Predictions
+
+Using the aforementioned ‘final model’, predictions of death count are produced for each of the first 17 weeks of 2020 and for every province. Having estimated the log relative risk (equation 1) using the observed data from 2016-2019, 1,000 samples of $\log(\rho_{ijtk})$ are taken from the posterior predictive distribution for each combination of province and week, as mentioned in Section 4.8. The exponential of these simulations is then taken, followed by multiplication with the calculations for $E_{ijt5}$ to obtain the predictions for the parameter of the Poisson distribution for death counts, $E_{ijt5}\rho_{ijt5}$. Finally, the death count predictions in each province and week are produced by sampling from a Poisson distribution for each of the values of $E_{ijt5}\rho_{ijt5}$. That is to say, the predicted death count, in province $i$ and region $j$ in week $t$ of 2020, is computed by sampling from a Poisson distribution with a mean equal to the simulated value for $E_{ijt5}\rho_{ijt5}$. Importantly, a simulation-based approach during the post-processing stage means that statements can be made about the uncertainty of the estimates for mortality count and rate.
+
+The next section looks at the results from the model. To better depict these results, plots and maps have been made which look at the predicted vs. observed mortality rates and the percentage excess mortality. It follows that for any results reported at regional level, the death count in region $j$ on week $t$ of 2020 are calculated by summing across all death counts for the provinces nested in said region on that week. 
+
+\newpage
+
+# Results
+
+In the following sections, all intervals shown in brackets represent the 95$\%$ interval for the estimated values.
+
+## Total Mortality
+
+```{r figure, dev="tikz", echo=FALSE,warning=FALSE,message=FALSE,error=FALSE, results='hide',fig.keep='all', fig.height=5, fig.width=10, fig.cap="Total weekly mortality in Italy for males and females"}
+
+library(tikzDevice)
+load("BYMM_dataprovs.RData")
+load("total_mortality_plot_data.RData")
+
+
+dates=as.Date("2020-01-01")
+for (i in 2:max(predicted_male$week)) {
+  dates[i]=dates[(i-1)]+7
+}
+dates=format(dates,format="%e\n%b")
+
+dates=as.Date("2020-01-01")
+for (i in 2:max(predicted_female$week)) {
+  dates[i]=dates[(i-1)]+7
+}
+dates=format(dates,format="%e\n%b")
+
+
+library(ggplot2)
+library(tidyr)
+library(gridExtra)
+
+theme_set(theme_bw())
+plot.m <- ggplot(predicted_male, aes(x=week)) +
+  geom_point(aes(y=mean),color='blue') +
+  geom_line(aes(y=mean),color='blue') +
+  geom_point(aes(y=observed), color='red') +
+  geom_line(aes(y=observed),color="red") +
+  geom_ribbon(aes(ymin=low,ymax=upp),alpha=.2) +
+  scale_x_continuous("Week", breaks=1:length(dates), labels=dates) +
+  ggtitle("Males") +
+  xlab("Week") +
+  ylab("Number of deaths") +
+  coord_cartesian(ylim=c(4000,12000)) +
+  annotate(geom="text", x=8, y=10000, label="Observed mortality",
+           color="red") +
+  annotate(geom="text", x=12, y=5000, 
+           label="Predicted mortality \n (with 95\\% interval)", color="blue") +
+  theme(legend.position="none", plot.title=element_text(hjust=0.5, face="bold", size=16
+                                                        #,family="CM Roman"
+                                                        ))
+plot.f <- ggplot(predicted_female, aes(x=week)) +
+  geom_point(aes(y=mean),colour='blue') +
+  geom_line(aes(y=mean),colour='blue') +
+  geom_point(aes(y=observed), colour='red') +
+  geom_line(aes(y=observed),colour="red") +
+  geom_ribbon(aes(ymin=low,ymax=upp),alpha=.2) +
+  scale_x_continuous("Week", breaks=1:length(dates), labels=dates) +
+  ggtitle("Females") +
+  xlab("Week") +
+  ylab("Number of deaths") +
+  coord_cartesian(ylim=c(4000,12000)) +
+  annotate(geom="text", x=8, y=10000, label="Observed mortality",
+           color="red") +
+  annotate(geom="text", x=12, y=5333, 
+           label="Predicted mortality \n (with 95\\% interval)", color="blue") +
+  theme(legend.position = "bottom", plot.title=element_text(hjust=0.5, face="bold", size=16))
+
+#also add legend
+title <- grid::textGrob("Total number of predicted and observed deaths \n for each week of 2020", gp=grid::gpar(fontsize=16, fontface='bold'))
+grid.arrange(plot.m, plot.f, 
+             nrow=1, 
+             top=title)
+```
+
+This section gives an overview of the total mortality for males and females, in the whole of Italy, during the first 17 weeks of 2020. For men, total weekly deaths started from 6,278 in the first week and ended with 5,748 on the final week of the study period, beginning 22nd April. As can be seen from Figure 2, deaths for males reached a peak of 11,301 on the week beginning 18th March, with an approximate excess of 5,515 (5,189 to 5,841) deaths. In comparison, women’s deaths reach a lower peak of 10,612 the following week (starting 25th March), with approximately 4,414 excess deaths (3,748 to 5,016). On Figure 2, the model predicts greater total weekly mortality than was observed for the first 9 weeks of 2020, up until the week beginning 26th of February. It also suggests, in the absence of COVID-19, a slow, approximately linear decline in weekly mortality for both males and females was expected during the first four months of 2020. Comparing these plots may lead one to believe COVID-19 had a greater impact on mortality for women, given their observed mortality curve is, in general, higher than for the men. In fact, over the study period, deaths totalled 129,044 for women, versus just 122,129 for men. However, the predicted mortality curve (total mortality in 2020 had there not been COVID-19) for women is also higher, on average, than for males. Implying that, whilst total observed mortality might be greater for women, the excess mortality due to COVID-19 may not have been higher for women. Indeed, the model estimates a total excess of 15,028 women died compared to 17,605 men, across the entire 17 weeks (see Table 3 for 95$\%$ intervals). 
+
+Figures 10 and 11 begin to assess spatial differences in the expected and observed all-cause mortality in Italy during 2020, by splitting into the 5 main macro-areas: (*by row*) the North-West, Lombardia, the North-East, the Centre and the South. The vertical distance between the red, observed mortality curve and the blue, predicted mortality curve represents the excess mortality in that area for the given week, along with a 95$\%$ interval band surrounding the predicted deaths curve estimated by the model. It is immediately obvious that Lombardia was most heavily affected by excess mortality for both sexes, with an excess of 3,291 men (3,205 to 3,368) and 2,406 women (2,288 to 2,516) on the week beginning 18th March (just over a week after the nationwide lockdown began). In contrast, for women in the Centre and South there appears to have been minimal deviation from what was expected, and the observed mortality curve just exceeds the expected interval on most weeks. For example, the South saw 27 excess female deaths (-173 to 214) on the equivalent week. For men, the Centre and South are likewise less affected than up north, though both areas appear to have shallower peaks than for women. Further inspection shows that excess mortality was delayed in the South, with cases peaking about a week later for men (and women). The Centre peaks first with an estimated 396 excess male deaths (283 to 499) on the 18th March and the South follows at 168 (33 to 302) the week after, before returning within the expected interval. For males in the North-West and the North-East, mortality begins to deviate substantially from the estimated trend around the 4th of March, one week after Lombardia. Moreover, for females there is a week-long delay in effects of the pandemic in these areas compared to males, with mortality rates deviating from the expected trend on the week of 11th March in the North-East and the North-West. Summing across the whole study period and for both sexes, the posterior mean of total excess all-cause mortality for Lombardia was approximately 23,000 individuals. Whereas the South averaged 2,000 fewer deaths than expected, despite the South having around 9 million more residents (see Table 1 for equivalent results from the other macro-areas and their 95$\%$ intervals). 
+
+These all-cause mortality plots are further separated into the 20 main regions that make up the whole of Italy, as seen in Figure 9 for females. As anticipated, the regions in the North-West, Lombardia and North-East of Italy were substantially more impacted than others, for both men and women. Regions in the South like Calabria, Campania, Molise, Puglia, Sicilia and Sardegna never exceed the expected interval, in fact many of them appear to show periods of lower mortality than predicted. For instance, the region of Sicilia is estimated to have observed a posterior mean of 566 less deaths than expected across the entire study period. Unusually, one region in the South, Basilicata, experienced an early spike in mortality on the week starting 19th February, in which an estimated 27 (11 to 43) more women died than expected for that week. Furthermore, Abruzzo is the only region in the South to experience a ‘first-wave’ in excess mortality during March, showing significant (at the 95$\%$ level) excess mortality on week 12 and 13. The model estimates 45 and 49 women, respectively, in this region despite showing no significant excess mortality for any other week of the study period. This is less surprising when looking at Abruzzo’s location in Figure 1, as its one of the South’s northern-most regions and, thus, closest to the worst affected areas. The remaining regions making up the North-West, North-East, Lombardia and parts of the Centre show a huge excess of all-cause mortality, with the most extreme excess in Lombardia and generally tapering outwards. For example, Friuli Venezia Giulia, the most North-Eastern region as seen on Figure 1, shows a lagged and diluted peak on that only exceeds the predicted interval 3 weeks after Lombardia.
+
+A brief point of interest from Figure 9 is the heterogeneity in excess mortality experienced by the different regions in the Centre. Here we see Marche, which reaches a peak at 112 excess female deaths on the week beginning the 18th of March and remains at significant excess female mortality for another 4 weeks. Conversely, the region of Umbria, a direct neighbour to Marche, shows practically no excess mortality for females. Only the week beginning the 8th of April has significant excess, with 28 more female deaths than expected and a 99$\%$ posterior probability of exceeding the predicted value. Likewise, Lazio shows a deficiency in the observed mortality for almost the entire study period, estimating 1,064 less female deaths (-2,355 to 177) and 727 less males (-1,713 to 222) than expected.
+
+## Percentage Excess Mortality
+
+The extent of the geographical variation is clear when looking at the maps of weekly percentage excess mortality for women across the whole of Italy, in Figure 11. The standardisation to excess mortality as a percentage is performed, so that one can better distinguish the differences between areas when comparing maps and plots. On the maps, positive percentage excess mortality is represented by the red and negative percentage by the blue, with absolute value increasing as the shade deepens. The general trend shows lower mortality than expected for the first 8 weeks of the year across most of Italy, with excess mortality appearing in certain regions of Lombardia around the 26th of February. Excess mortality accelerates over the subsequent 5 weeks, spreading outward to most regions in the North-West and North-East, as well as some in the Centre. Finally, mortality begins returning towards the expected level over the final 4 weeks of the study period and some of the bordering regions in the north, such as Friuli Venezia Giulia and Piemonte, show minor excess mortality by the final week. By ‘zooming in’ to the 7 worst affected regions during ‘intense’ period (from 26th of February to 28th of April) - which cover Lombardia, all North-Western and most North-Eastern regions - for men on Figure 12. Darkening first occurs at hot-spots in central Lombardia around the 5th of February in the province of Cremona, before moving to Lodi the following week. It then begins to show in the provinces of Bergamo and Brescia, before finally reaching Sondrio by the 11th of March. Excess mortality also spreads west into Piemonte and parts of Emilia-Romagna on the week beginning the 4th of March, as well as heading north-east into Trentino-Alto Adige around the same time, where the posterior mean of excess mortality is 9.73$\%$ (2.09$\%$ to 17.6$\%$) around the 26th of February. Over the following weeks, percentage mortality grows in these regions until it peaks between 18th March-31st March at 57.5$\%$ in Piemonte (52.6$\%$ to 62.3$\%$), 56.2$\%$ in Liguria (48.6$\%$ to 63.1$\%$), 58.3$\%$ in Emilia-Romagna (53.6$\%$ to 62.9$\%$), 61.5$\%$ in Valle d’Aosta (38.2$\%$ to 82.4$\%$), 54.0$\%$ in Marche (45.6$\%$ to 61.5$\%$), 56.6$\%$ in Trentino-Alto Adige (47.4$\%$ to 65.7$\%$) and 78.2$\%$ (76.2$\%$ to 80.0$\%$) in Lombardia. After these peaks excess mortality shows a decreasing trend across all areas, with most outer provinces reaching approximately 0$\%$ as shown by the whiter spots on Figure 12, in the final week. It is worth noting that a similar evolution is revealed on maps for females, though consistently lower excess mortality is seen for equivalent weeks and areas.
+
+Magnification to the level of province, provides a more detailed view of the initial spread in Lombardia. Figure 3 confirms it starting as early as the 5th of February in Cremona at 9.62$\%$ (-19.6$\%$ to 37.0$\%$) excess mortality for men, for which the posterior probability of percentage excess mortality exceeding zero is 71.6$\%$. It then moves to the province of Lodi the following week, at 7.34$\%$ (-33.3$\%$ to 41.7$\%$) excess mortality that has a 61.8$\%$ posterior probability of exceeding 0. Next it begins to show in Bergamo and Brescia, before finally reaching Sondrio. Bergamo experiences the highest peak of these areas, at 91.6$\%$ excess mortality (89.9$\%$ to 93.3$\%$) for males on the week beginning 18th of March. Excess mortality then spreads West into Piemonte, South-West into parts of Emilia-Romagna and mainly North-East into Trentino-Alto Adige, as seen on Figure 12. 
+
+Figure 5 presents the 9 worst affected provinces for males in the North-West, from which we can see excess mortality peaked around the week beginning the 18th of March in most of the provinces, with a one-week lag in Asti and Novara. Notably, all 9 of the provinces experience at least a 1.5-fold increase in mortality for at least one week during March. However, Figure 8 shows more heterogeneity between the 9 worst affected regions for males in the North-East. Piacenza (Emilia-Romagna) reaches a peak of 84.3$\%$ (78.2$\%$ to 89.6$\%$) excess mortality on the 18th of March and remains at over a 1.5-fold increase for 6 weeks. Yet some provinces, like Verona and Trieste only reach a 50$\%$ increase during the study period and all provinces (except Parma) appear to have the expected interval cover the 0$\%$ level by the final week (22nd April). In fact, excess mortality for males in Bolzano is -8.08$\%$ by this time (-45.9$\%$ to 27.0$\%$), with a 63.3$\%$ posterior probability of having negative excess mortality. A similar trend is seen in the North-West provinces and variation in North-East provinces is seen for females.
+
+```{r Excess rate males Lombardia, dev="tikz", echo = FALSE, message=FALSE, fig.align='center', fig.cap="Excess all-cause mortality rate for males in Lombardia.", out.height = "110%", out.width='100%', fig.pos='H'}
+knitr::include_graphics("excess_rate_BYMM_male_Lombardia.pdf")
+```
+
+When evaluating excess mortality in northern provinces against Figure 6, which shows percentage excess mortality for males in the 9 worst affected provinces in the South, none of the provinces in the South reach even 50$\%$ excess mortality during the peak of the first wave. In fact, for many of the 'worst affected' provinces in the South, like Enna (in Sicilia) or Crotone (in Calabria), the excess mortality curve oscillates above and below 0$\%$ line, which remains within the expected 95$\%$ interval for almost all the weeks, across all the provinces, hence they are essentially unaffected. The weeks beginning 15th of January and 19th of February saw significantly lower mortality than expected in Crotone, with 68.9$\%$ (-150$\%$ to 0$\%$) and 29.0$\%$ (-100$\%$ to 33.3$\%$) less male mortality, respectively. The drastic difference in excess mortality experienced in the provinces in the South versus Lombardia can be seen by comparing the peaks of the worst affected province in each macro-region. Vibo Valentia (Calabria, the South) saw excess mortality rate peak on the 25th of March with 30.1$\%$ (-4.35$\%$ to 60.9$\%$) extra male mortality that has a 93.9$\%$ posterior probability of excessing 0$\%$, implying it is not significant at the 5$\%$ level. Contrastingly, Bergamo (Lombardia) saw a peak of 91.6$\%$ (as mentioned above) with a 100$\%$ posterior probability of exceeding 0$\%$, giving it a peak approximately 3 times higher than the South’s worst affected province. The same is true the plots for women in the South. This implies that the observed rate of mortality from January-April of 2020 was as expected for a ‘typical’ year in the South, with COVID-19 having little impact on the all-cause mortality of both men and women, and no single province experiencing most of the excess mortality. 
+
+## Excess Mortality Rates
+
+Finally, one can assess differences in excess mortality for males and females by comparing rates in some of the worst affected provinces across macro-regions. From Figure 7 we can see excess mortality rate peaking across several of the Centre’s provinces on 18th March, for males. Pesaro e Urbino (in Marche), being by far the worst affected province for both men and women in the Centre, reaches a peak excess rate of approximately 55 (48 to 62) per 100,000 men and 36 (29 to 43) per 100,000 women, for that week. Parallel trends can be seen for both sexes in the remaining macro-regions, though whilst patterns are similar, comparisons of the figures indicate that excess mortality rates are, in general, lower for women. For example, across provinces like Bergamo, Cremona and Brescia excess rates peaked at 191, 150 and 104 additional male deaths (per 100,000) compared to 133, 149 and 79 females. 
+
+```{r Macro-area plot, dev="tikz", echo=FALSE,warning=FALSE,message=FALSE,error=FALSE, results='hide',fig.keep='all', fig.height=4.5, fig.width=5.5, fig.cap="Percentage excess mortality across the entire study period, stratified by gender and macro-region."}
+
+library(dplyr)
+library(tikzDevice)
+
+## Load plot data
+load("macroregion_table_female.RData")
+load("macroregion_table_male.RData")
+
+## Add macro-region and gender to each vector
+
+cm = centro.male %>% mutate(mr="The Centre", g="Males") 
+cf = centro.female %>% mutate(mr="The Centre",g= "Females")
+lm = lombardia.male %>% mutate(mr="Lombardia",g="Males")
+lf = lombardia.female %>% mutate(mr="Lombardia",g="Females")
+nom = nordovest.male %>% mutate(mr="The North-West",g="Males")
+nof = nordovest.female %>% mutate(mr="The North-West",g="Females")
+nem = nordest.male %>% mutate(mr="The North-East",g="Males")
+nef = nordest.female %>% mutate(mr="The North-East",g="Females")
+sm = sud.male %>% mutate(mr="The South",g="Males")
+sf = sud.female %>% mutate(mr="The South",g="Females")
+
+## Create plot matrix
+plot.matrix=cm %>% bind_rows(cf,lm,lf,nom,nof,nem,nef,sm,sf)
+plot.matrix=plot.matrix %>% rename(
+  "Percentage excess mortality"=mean.excess,
+  "Lower quantile"=low.excess,
+  "Upper quantile"=upp.excess,
+  "Macro-region"=mr,
+  "Gender"=g
+)
+
+## Create plot with macro-region on x-axis (one for males and females in red and blue) and percentage excess mortality on y axis with 
+## error bars.
+
+library(ggplot2)
+theme_set(
+  theme_classic() +
+    theme(legend.position = "top")
+)
+plot.matrix %>% ggplot(aes(`Macro-region`,`Percentage excess mortality`))+
+  geom_errorbar(aes(ymin=`Lower quantile`,ymax=`Upper quantile`,color=Gender),position=position_dodge(0.3),width=.2) +
+  geom_point(aes(`Macro-region`,`Percentage excess mortality`,color=Gender),position = position_dodge(0.3)) +
+  xlab('Macro-region') + ylab('Percentage excess mortality \n (with 95\\% interval)') +
+  labs(color = "Gender") +
+  coord_cartesian(ylim=c(-20,50)) +
+  scale_color_manual(breaks = c("Females", "Males"),
+                        values=c("red", "blue"))
+
+  
+
+```
+
+Overall, Lombardia was by far the worst affected region for this study period, with at least 9 of its provinces experiencing a 1.5-fold increase in all-cause mortality for the majority of the peak month (March). Figure 4 supports this argument by showing the posterior mean of the percentage excess mortality for males across the whole study period as 41.4$\%$ (38.0$\%$ to 44.6$\%$). Similarly, for females in the same region it is 36.0$\%$ (30.1$\%$ to 41.8$\%$). The remaining macro-areas then rank (*in descending order*): the North-West, North-East, Centre and then finally the South, which saw negligible amounts of excess mortality in the majority of its regions, apart from the northern-most one Abruzzo. In fact, Figure 4 depicts -2.68$\%$ (-8.98$\%$ to 2.85$\%$) and -3.78$\%$ (-14.2$\%$ to 5.57$\%$) for males and females in the South, respectively. Figure 4 also emphasizes the general trend of males experiencing greater excess mortality than females across every macro-region, given their posterior mean across the whole study period are, on average, 2.63$\%$ higher.
+\newpage
+
+# Evaluation and Discussion
+
+## Areas of Significance
+
+***Heterogeneity seen in the North-Eastern Provinces***
+
+Comparison of results in the Northern provinces, discussed in Section 6.2, saw greater heterogeneity across North-Eastern areas. Trieste is on the furthest North-Eastern corner of Italy, further away from the ‘epicentre’ spreading from the heart of Lombardia, so its observed rates only slightly exceeding the expected interval is not unusual. Yet, Verona (in Veneto) almost borders Lombardia, thus its relatively small amount of excess morality is surprising. In fact, Veneto as an entire region experienced comparatively low amounts of excess mortality (as seen on Figure 9) considering the first confirmed death took place there and could be attested to the strict measures and thorough testing scheme implemented by local government [@cassone_2021_can]. 
+
+***Why was the South so unaffected?***
+
+The results suggest huge geographical differences in excess mortality between the North and South of Italy, with the South comparatively unaffected by COVID-19. This may be due to the fact that news of an outbreak in the North allowed time for authorities in the South to prepare for the spread of the disease, as well as to impose appropriate restrictions on its residents [@a2020_coronavirus]. Some reports indicate that Southern hospitals were more effective in handling the disease due to previous experience handling infectious diseases like cholera, HIV, SARS and Ebola [@a2020_coronavirus2]. For instance, the Cotugno Hospital in Naples was praised on a UK news broadcast on the 31st of March, for its strict and pervasive measures for containing the spread of the virus. Historically, the South of Italy has excelled in the practice of medicine and has a long-standing reputation of outstanding procedural care in its hospitals. Furthermore, Northern regions feature lower average temperatures and higher population densities which are likely to increase risk of mortality from contraction and the probability of transmission between residents, respectively. Moreover, the south has a lower average age of population compared to the north. In 2019, the south had 21.6$\%$ of their population aged over 65 vs. 23.9$\%$ in the north [@worldhealthorganization_2021_world], making the northern population more vulnerable to the disease.
+
+***Why was Lombardia so badly affected?***
+
+From the results it is apparent that Lombardia was the worst affected macro-region for both sexes. Unlike the south, northern regions did not have as much time to prepare for an outbreak since Italy’s first confirmed death was in Veneto (North-East) and there were believed to be hundreds of cases in the surrounding areas at the time. During the start of February when these cases began to multiply, the lack of severe restrictions combined with a higher population density in the north would have been optimal for contagion in places like bars, public transport, and offices. Another key issue stems from the decentralised healthcare system which caused different guidelines to be issued by the regional health authorities that conflicted with those issued by the national ministry of health. These inconsistencies between regional authorities and central government would’ve created confusion amongst citizens and hospitals, as well as delays in cohesive social-distancing measures, inevitably worsening cases [@usuelli_2020_the].
+
+An interesting study by @coccia_2020_factors on the diffusion of COVID-19 in Italy determined that quantities of air pollution may affect transmission due to airborne viral infectivity. It used a sample of 55 Italian provinces and data on infected individuals from 7th April 2020. Results indicated that transmission dynamics of the disease are highly associated with air pollution of cities in the presence of low wind speed. This study showed Lombardia, specifically the province of Milan, is located on the edge of the most polluted part of Italy, providing another potential explanation of the accelerated spread in these areas.
+
+***Why were men worse affected than women?***
+
+```{r Excess mortality sexes, echo=FALSE,warning=FALSE,message=FALSE,error=FALSE}
+library(kableExtra)
+library(dplyr)
+
+load("excess_sex_data.RData")
+
+excess_female = round(excess_female, digits = 2)
+excess_male = round(excess_male, digits = 2)
+
+
+sex_table <- matrix(c(excess_female, excess_male), byrow=TRUE, nrow=2)
+
+row.names(sex_table) = c("Females", "Males")
+colnames(sex_table) = c("Observed mortality", "Mean excess mortality", "Standard deviation of \n excess mortality", "Lower bound", "Upper bound")
+
+sex_table <- kable(sex_table, caption = "The total observed mortality count, as well as the posterior mean, standard deviation and 95\\% interval bounds of total, estimated excess mortality count for males and females.", align="c")
+
+#sex_table = sex_tablee %>%
+#column_spec(2:6, width = "3cm")
+
+sex_table = sex_table %>% kable_styling(latex_options="hold_position") %>% kable_styling(latex_options="scale_down")
+
+
+sex_table
+
+```
+
+As expected, more observed mortality occurred in the older age categories, whom are more likely to suffer with pre-existing health conditions that place them at higher risk of mortality. However, the trend in higher excess all-cause mortality seen for males in the results (summarised in Table 3) is more difficult to explain. Likewise, reports from the study period indicate that coronavirus mortality rates were twice as high for men than women in Italy across all age groups [@schumaker_2020_covid19]. This is a characteristic noted in many different countries and studies like @jin_2020_gender have observed that while men and women are equally susceptible to contraction, men are more prone to dying from the virus. They noted that “the number of men who died from COVID-19 is 2.4 times that of women” in China. Another study by @bwire_2020_coronavirus theorises that both biological and behavioural differences between males and females could explain the disparities in COVID-19 mortality. In general, females are more resistant to infections than men for a variety of factors, including hormone differences and lower expressions of coronavirus receptors, but also because of common lifestyle choices like lower levels of smoking and drinking. They also noted that often women have a more responsible attitude towards the pandemic, meaning they tend to take preventative measure more seriously. This generalisation is questionable, since it is uncertain whether attitudes vary as starkly as this study suggests across different cultures, or whether these behavioural differences warrant the significant differences in excess mortality across genders, estimated by this project. More likely, there are certain biological differences between men and women that influence either the probability of contraction of the virus or likelihood of fatality (given contraction). 
+
+Furthermore, all-cause mortality is expected, in general, to be higher for males. Many studies like @owens_2002_ecology and @verbrugge_1987_sex have discussed the observed higher mortality rates for males compared to females, across all stages of the life cycle. In the US, for example, men have consistently higher mortality rates across the top 11 major causes of death, whether it be heart disease, suicide or accidents [@blattkalben_2000_common]. Overall, these studies may explain the consistently higher mortality rates exhibited by men in this analysis.  
+
+***Did lockdown measures have an impact?***
+
+As discussed in Section 4.1, the Italian government imposed a nationwide lockdown forcing the population to isolate at home and for all non-essential businesses to close. It is clear from all of the plots presented that excess mortality begins to decline within several weeks of the lockdown. The delay is likely due to the incubation period of the virus in which individuals exposed to the virus pre-lockdown exhibit symptoms up to two weeks after. Considering the consistency of the trend across all areas and for both sexes, one can infer the strict lockdown measures effectively stunted the growth of excess mortality.
+
+## Method Evaluation
+
+The following section seeks to evaluate the methods and model employed in this project, as well as suggesting areas of improvement if the analysis were to be repeated.
+
+As is typical of disease mapping models, the inclusion of the weekly non-linear terms in stage two of the hierarchical model allows for detection of heterogeneity across the different areas, while concurrently maintaining the ability to model mortality trends over time [@boulieri_2016_a]. The advantage of using of a Bayesian hierarchical model means controlling for any possible value of uncertainty in the model estimates for mortality, rather than a single point estimate as in a Frequentist model. Furthermore, it allows for probabilistic statements about the uncertainty of the model estimates of mortality rates. Additionally, the incorporation of a BYM structure implicitly captures the estimates of spatial heterogeneity in mortality rates between provinces, without the need for additional covariates which only vary across space. 
+
+On average, 2020 was warmer than previous years, so controlling for weekly, mean air temperature within the predictions for mortality makes important modifications to estimates. Moreover, aggregation of the weekly temperature in each province by the median (rather than mean) of its nested municipalities, ensures less sensitivity to outlier temperatures and so weekly province temperatures are not skewed by random, extreme high or low temperatures.
+
+However, a large limitation to this project was computing memory and power, ironically because of remote learning during COVID-19. Given a newer and less weathered computer, improvements to the model would include increasing the number of simulations drawn from the posterior distribution to greater than 1,000, which increases the precision of model estimates of excess mortality. Another improvement would be adapting the highest resolution of the model to municipality level, given the data is available. This is one of the main weaknesses of the method as it induces less spatial resolution of the model estimates, so allows for less detail in the trends. Repeating the model at the smallest administrative level in Italy would detect greater spatio-temporal heterogeneity, thus providing more detailed predictions about the spread in smaller areas and consequential impact on health-care services. 
+
+Other changes could be implemented and tested in the second stage of the model, the linear predictor. This could also have included controls for other factors, like pollution levels and wind speeds, given the research by @coccia_2020_factors mentioned in Section 7.1. Though internal standardisation was performed to adjust for the age distribution of the population, this could be developed further to adjust for the different proportions of ethnic groups living in Italy, given studies like @nazroo_2020_evidence have showed these groups suffering a disproportionate numbers of fatalities.
+
+Some reports believe COVID-19 was circulating in Italy as early as September 2019 [@saplakoglu_2020_how]. Although this is not much of an issue as the project is concerned with all-cause mortality, it implies that the study period may not capture changes in mortality occurring at the earliest stages of the pandemic. This leads onto another potential improvement of the analysis – an increase in the study period. The different data sources used in this study are available for the whole of 2020, thus a larger study could employ the same model to explore the results of weekly excess mortality for the entire first year of the pandemic, across Italian regions.
+
+Finally, a study by @scortichini_2020_excess which performs a "two-stage interrupted time-series design using daily mortality data for the period January 2015–May 2020" [to assess excess mortality in Italy] comes to many of the same conclusions as this project, including higher excess mortality for males; the majority of excess mortality occurring in the northern macro-areas; and a slightly delayed impact for females. Considering the other study employs a different model specification involving the use of B-splines and yet makes similar inferences, this suggests reliability in the trends shown by this analysis.
+
+## Model Testing
+
+```{r model comparison section, echo=FALSE}
+#library(knitr)
+library(kableExtra)
+pD_male <- c(201.86, 202.00, 283.25)
+pD_female <- c(218.66, 220.01, 299.85)
+dic_male <- c(50913.15, 50885.15, 50224.29)
+dic_female <- c(52661.93, 52641.58, 51684.31)
+waic_male <- c(51010.17,50980.10, 50313.99)
+waic_female <- c(52822.79, 52801.68, 51830.74)
+
+pD_male <- as.character(pD_male)
+dic_male <- as.character(dic_male)
+waic_male <- as.character(waic_male)
+
+model_comparison <- matrix(c(pD_male, pD_female, dic_male,dic_female, waic_male, waic_female), byrow=FALSE, nrow=3)
+
+row.names(model_comparison) = c("Separate gender models", "Mean temperature model", "BYM model")
+
+colnames(model_comparison) <- c("Males", "Females", "Males", "Females", "Males", "Females")
+
+tests_table <- kable(model_comparison, caption="Comparison of model testing values for the different model versions", align="c", digits=2)
+
+headed_table <- add_header_above(tests_table, header=c(" "=1, "pD"= 2, "DIC"= 2, "WAIC"= 2))
+
+headed_table = headed_table %>% kable_styling(latex_options="hold_position") 
+
+
+headed_table
+
+```
+
+This section discusses the methods for determining which model iteration would be used for the final model. Given little prior knowledge on the trends in death rates for 2020, all versions used the same reasonably non-informative priors, so there is little benefit in checking those are appropriate. Similarly, checking model residuals is ineffective, since the point of the model is predicting mortality in a year that would not have been like what was observed, i.e. without COVID-19. Some papers suggest computing and comparing statistical measures like mean squared error (MSE) or mean squared predicted error (MSPE) for each model [@carroll_2015_comparing]. Nonetheless, these are based on a ‘standard’ set up that aim for predictions to be close to observed data, which is counterintuitive for this model. 
+
+Ultimately, the best approach is to compare the $p_D$, $DIC$ and $WAIC$ values for each model version, as seen in Table 4. Note, the “gender included model” is not comparable with the rest because the remaining versions essentially model half the data - one half in the male model and the other in the female model. Of the remaining three, the “BYM model” has the largest $p_D$ values for males and females, at around 283 and 300 respectively. This indicates it has the greatest number of effective parameters for both sexes and its comparatively high complexity is likely a result of the BYM interaction introducing large number of additional parameters. The “Mean temperature model” has approximately similar numbers of effective parameters for both sexes as the “Separate gender model”, which uses the median for aggregating province temperatures.
+
+In terms of $DIC$ and $WAIC$, the “BYM model” has the lowest values of both for both males and females out of all three models, despite having the greatest ‘complexity’ in terms of $p_D$ values. Its $DIC$ value is at least 660 and 957 less than either of the other models, for males and females respectively. Similarly, its $WAIC$ is at least 666 and 970 less than either of the other models, for males and females respectively. When examining the other two, the “Mean temperature” model appears to have fractionally lower $DIC$ and $WAIC$ values for both sexes. Given the only difference in these models is the aggregation of province temperature, this could indicate the mean is a more suitable method than the median. Therefore, despite greater sensitivity to outlier municipality temperatures, these figures imply using the mean to aggregate temperatures could be more appropriate in the final model (“BYM model” which uses the median). Nonetheless, while the statistics in Table 4 are useful, it is not sensible to place all the importance of determining the ‘best’ model on their values. The differences between the “Separate gender” and “Mean temperature” values are not enormous, hence greater rationale for using the mean in the final model is required. Regardless of using the mean or median to aggregate temperature for provinces, the “BYM model” is by far the most appropriate final model of the three, due to its substantially lower $DIC$ and $WAIC$ values.
+
+## Possible Implications of Results
+
+The trends in mortality discussed in Section 6 confirm that the efficiency of implementation for social distancing measures may have been crucial for preventing excess mortality during the first-wave of the pandemic, as shown by the stable trends in the South. Miscommunication and delays of measures in the North may have exacerbated cases, causing the spike in excess mortality during March with mortality reaching twice the expected rate in many regions. Eventually, lockdown measures managed to stifle the growth of excess mortality and common decreasing trends are shown across northern regions. The delays in the north (discussed in Section 7.1) appear detrimental, considering the end of the study period still shows significant excess mortality in regions like Lombardia and Emilia−Romagna (North-East). The Italian government should be encouraged to ensure harmonization across its local governments in the future, to minimise the losses caused by lack of efficiency and communication. 
+
+As previously mentioned, limited knowledge on the disease when it first emerged means less reliable data around the time. It is now believed to have been circulating in Italy as early as September 2019 and some deaths due to COVID-19 may have gone undetected. This may explain the deviations from the expected downward trend in mortality seen around the 5th of February, for both sexes, on Figure 2. Despite this, the first confirmed death was not till the 21st of February and most deviations from the expected trend occur at or after this week. This shows the model is accurate in tracing the temporal trends and may be useful for predicting future mortality to aid in policymaking e.g. the severity of lockdown measurements required for particular areas. 
+
+Another useful implication of the Bayesian nature of the model is that, as new data becomes available, the model can be used to determine when mortality returns within the ‘typical’ range in certain areas, or conversely when they deviate from the norm. Given this model looks at excess mortality based on ‘normal’ years (without a global pandemic), this model could even be used as a means of live surveillance to identify any unusual new patterns of mortality in the future, across Italy. This may spot emerging public health threats, for example a new COVID-19 variant, and allow the government to suppress them early on. 
+\newpage
+
+# Conclusion
+
+## Summary of Findings
+
+This project effectively estimates the excess mortality that occurred during the start of the COVID-19 outbreak in Italy. Moreover, it provides an extensive spatio-temporal outlook of excess mortality and underscores the vast heterogeneity between different areas, even amongst neighbouring provinces. Extensive research, model comparison and exploration of similar papers led to implementation of the most appropriate time-series model that accounts for factors like temperature, influence from previous weeks, and both the structured and unstructured spatial heterogeneity across Italy. The post-model analysis examines excess mortality and percentage excess mortality, as well as presenting maps depicting the evolution of the latter across the 17-week study period.
+
+With respect to results, the model provides clear evidence for excess mortality in certain regions of Lombardia, the North-East and North-West of Italy. The time-series analysis emphasises the manner in which excess mortality spread from particular provinces within Lombardia as early as the 5th of February, dispersing to surrounding regions in the North-East and North-West. Additionally, scaled plots accentuate the stark differences in excess mortality between northern Italy and the Centre, but most of all, the South. The majority of Southern areas were otherwise unimplicated by COVID-19, showing almost no significant excess mortality during the first-wave of the pandemic. Indeed, the model estimates total excess mortality across both sexes as approximately 39$\%$  for Lombardia, 18$\%$ for the North-West, 14$\%$ for the North-East, -0.50$\%$ for the Centre and -3.2$\%$ for the South. Results also appear to show men were worse affected than women, with 17.1$\%$ higher total excess mortality for males for the study period, potentially indicating biological factors for males that exacerbate the likelihood of mortality, given contraction of COVID-19. Or due to the consistent pattern of higher male mortality rates exhibited across all major causes of death, shown in studies like @blattkalben_2000_common. 
+
+Tracking the weekly progression of excess mortality during the first-wave using spatial maps has stressed the importance of factors like efficiency of lockdown measures, effective communication between local and national authorities and meticulous hospital practice for preventing the spread of the virus. Measures such as these may explain the enormous differences in excess mortality between the north and south of Italy, although some environmental factors like temperature, population density and pollution level likely contribute. In addition, results indicate that lockdown measures helped to limit the growing excess mortality during the first-wave in Italy, given every province and region shows a declining trend within several weeks of its imposition.
+
+Overall, extensions of this model could be used for live surveillance of Italian mortality, allowing officials and local governments to track trends and be alerted to mortality exceeding the ‘typical’ range. It will be especially useful as the government begins easing lockdown measures, since deviations of local trends in expected mortality will signal officials to delay the removal of restrictions. Likewise, significant deviations in a number of locations could notify government to future waves of the pandemic.
+
+## Lessons and Skills Learnt
+
+The aims and statistical techniques of this project are based on the paper by @blangiardo_2020_estimating. During completion, I have learnt both theory and application of Bayesian statistics, from @baio_2012_bayesian and other referenced sources, which is a statistical approach I had not studied during my undergraduate degree. Independent study of the theory taught me about determination of the prior distributions and the use of the posterior predictive distribution for obtaining model predictions, which allowed me to generate the ‘expected’ mortality in 2020. Implementation of my model building in R developed my coding skills, especially my ability to “pipe” using the “dplyr” package. Additionally, research into the best simulation process for my model allowed me to compare the advantages and disadvantages of techniques like McMC and INLA, alongside learning how they produce simulations. 
+
+Another interesting aspect of the model, of which I had no previous experience, was the hierarchical structure of the distribution for mortality that is commonly used in disease mapping research. Forming stage two, the linear predictor, introduced me to different structures that can account for the spatio-temporal nature of the model. Independent research and model testing allowed me to ascertain which combination of these was most appropriate in the context of my project. A crucial element to learn was the package “ggplot2” which enabled me to present the results of the model, as well as to create the spatial maps of Italy – an aspect that required lots of attempts and inquiry. Finally, I have established skills in RMarkdown and LaTex for producing statistical write-ups, neither of which I had ever used before. 
+
+## Potential Future Research
+
+The simplest extension of this model would be analysis of excess mortality in Italy for more recent study periods, to assess whether each wave in excess mortality has been as severe as the first. Advantageously, the Bayesian nature of the model used allows for the data to be updated in this way. Likewise, the adaptability and versatility of the modelling framework makes it easily applicable for other countries, assuming sufficient data at an equivalent (or higher) spatial resolution. The UK, for example, would need data for at least city level. Alternatively, the model could be extended to account for cause-specific mortality using the data, once it becomes available for a sufficient number of years. Comparison with data on previous years would allow for estimation of excess mortality for certain other illnesses, because of COVID-19’s impact, or otherwise. There may also be some merit in expanding the model to control for variables like proportions of ethnic groups in the population or air pollution, to determine whether the latter is significant in explaining the pattern of spread, given the research by @coccia_2020_factors discussed in Section 7.1. 
+\newpage
+
+\singlespacing
+
+# Graph Appendix
+
+\includepdf[pages={-}]{excess_rate_BYMM_male_NordOvest.pdf}
+Figure 5: Percentage excess all-cause mortality for males in the 9 worst-affected North-Western provinces.
+
+\newpage
+
+\includepdf[pages={-}]{excess_rate_BYMM_male_Sud.pdf}
+Figure 6: Percentage excess all-cause mortality for males in the 9 worst-affected Southern provinces.
+
+\newpage
+
+\includepdf[pages={-}]{excess_mortality_BYMM_male_Centro.pdf}
+Figure 7: Observed and predicted (with 95$\%$ interval) excess mortality for males in the Centre of Italy.
+
+\newpage
+
+\includepdf[pages={-}]{excess_rate_BYMM_male_NordEst.pdf}
+Figure 8: Observed and predicted (with 95$\%$ interval) excess mortality for males in the North-East of Italy.
+
+\newpage
+
+\includepdf[pages={-}]{new_total_trends_BYMM_female.pdf}
+Figure 9: Observed and predicted (with 95$\%$ interval) all-cause mortality for females in all 20 Italian regions.
+
+\newpage
+
+\includepdf[pages={-}]{new_total_trends_macroarea_female.pdf}
+Figure 10: Observed and predicted (with 95$\%$ interval) all-cause mortality for females in the 5 main macroregions, across the entire study period. Order from top left is the North-West, Lombardia, the North-East, the Centre and the South.
+
+\newpage
+
+\includepdf[pages={-}]{new_total_trends_macroarea_male.pdf}
+Figure 11: Observed and predicted (with 95$\%$ interval) all-cause mortality for males in the 5 main macroregions, across the entire study period.Order from top left is the North-West, Lombardia, the North-East, the Centre and the South.
+
+\newpage
+
+\includepdf[pages={-}]{WeeklyTrendProv_all_BYMM_female_allregions.pdf}
+Figure 11: Maps of change in percentage excess mortality for females across the whole of Italy, from the 1st January to the 28th April 2020. 
+
+\newpage
+
+\includepdf[pages={-}]{WeeklyTrendProv_all_BYMM_male_7regions.pdf}
+Figure 12: Maps of change in percentage excess mortality for males in the 7 worst-affected regions, during the 'intense period' from the 26th February to the 28th April 2020.
+
+\newpage
+
+# Data Appendix
+
+All code was written and run using R, with a lot of help and guidance from my supervisor Professor Gianluca Baio. 
+
+```{r Data Appendix, eval=FALSE, echo=TRUE}
+## STEP 1: build model, run INLA, obtain simulations, create predidctions and data matrix to 
+## use in step 2
+
+library(dplyr)
+
+## Set working directory
+setwd("C:/Users/lpeck/OneDrive/Documents/STAT0035/COVID_Italy-master/COVID_Italy-master")
+
+## Loads original data which is at level of municipality and remove duplicates from the macro-
+## regions
+load("./NY_modelattempt/MacroRegions_all.Rdata")
+
+data=macro.regions$NordOvest %>% filter(DEN_REG %in% c("Piemonte","Liguria","Valle d'Aosta")) %>% 
+  bind_rows(macro.regions$Lombardia %>% filter(DEN_REG=="Lombardia")) %>% 
+  bind_rows(macro.regions$NordEst %>% filter(DEN_REG %in% c("Veneto","Emilia-Romagna",
+                                                            "Friuli Venezia Giulia",
+                                                            "Trentino-Alto Adige"))) %>% 
+  bind_rows(macro.regions$Centro %>% filter(DEN_REG %in% c("Toscana","Marche","Lazio",
+                                                           "Umbria","Abruzzo"))) %>% 
+  bind_rows(macro.regions$Sud %>% filter(DEN_REG %in% c("Basilicata","Calabria","Campania",
+                                                        "Molise","Puglia","Sardegna",
+                                                        "Sicilia"))) %>% 
+
+## Remove unneeded covariates
+  select(-c(p.africa,p.america,p.asia,p.europa))
+
+## Load required shapefiles needed for the spatial component
+prov.shp=rgdal::readOGR(dsn = "./Prov", layer = "Prov") 
+prov.shp@data=prov.shp@data %>% mutate(ID_area=row_number()) %>% rename(Province=DEN_UTS,
+                                                                        Prov_abbr=SIGLA)
+
+## Aggregate data at the level of province
+dataprov_male=data %>% group_by(DEN_UTS,week,Anno,sex) %>% mutate(
+  deaths=sum(morti),        # Sums the deaths over each municipality within each province
+  observed=sum(morti),      # Duplicate variable as need to remove 2020 values to do prediction
+                            # Variable observed won't be removed and can compare it to predictions.
+  expected=sum(E),          # Sums the expected over each municipality within each province
+  temperature=median(temperature)   
+                            # aggregates temp data at province level by median of its municipalities
+) %>% 
+                            # Select the relevant variables
+  select(COD_PROV,DEN_UTS,SIGLA,COD_REG,DEN_REG,Anno,week,deaths,observed,expected,temperature) %>% 
+  ungroup() %>% 
+                            # Rename variables for convenience
+  rename(Province=DEN_UTS,Prov_abbr=SIGLA,Region=DEN_REG,Year_ID=Anno) %>% 
+                            # Remove duplicates
+  distinct()
+
+dataprov_male = subset(dataprov_male, sex == "Males") # Select only the male data
+
+dataprov_male=dataprov_male %>% mutate(
+                            # Group temperatures in percentiles 
+  temp_grp=cut(temperature,breaks=quantile(dataprov_male$temperature,probs=seq(0,1,by=.01))),
+  IDtemp=cut(temperature,breaks=quantile(dataprov_male$temperature,probs=seq(0,1,by=.01)),
+             labels=seq(1:100)),
+                            # Remove values for deaths in 2020 so they can be predicted by INLA
+  deaths=case_when(Year_ID==5~NA_integer_,
+                   TRUE~deaths),
+                            # Create a row ID, which is useful to filter data off later
+  ID=row_number()
+) 
+dataprov_male=merge(dataprov_male,(prov.shp@data %>% select(Province,ID_area)),by.x="Province",
+                    by.y="Province",sort=F)
+
+## Repeat the same process but for females data
+dataprov_female=data %>% group_by(DEN_UTS,week,Anno,sex) %>% mutate(
+  deaths=sum(morti),                 
+  observed=sum(morti),                
+  expected=sum(E),                   
+  temperature=median(temperature)    
+) %>% 
+  select(COD_PROV,DEN_UTS,SIGLA,COD_REG,DEN_REG,Anno,week,deaths,observed,expected,temperature) %>%
+  ungroup() %>% 
+  rename(Province=DEN_UTS,Prov_abbr=SIGLA,Region=DEN_REG,Year_ID=Anno) %>% 
+  distinct()
+
+dataprov_female = subset(dataprov_female, sex == "Females") 
+dataprov_female=dataprov_female %>% mutate(
+  temp_grp=cut(temperature,breaks=quantile(dataprov_female$temperature,probs=seq(0,1,by=.01))),
+  IDtemp=cut(temperature,breaks=quantile(dataprov_female$temperature,probs=seq(0,1,by=.01)),
+             labels=seq(1:100)),
+  deaths=case_when(Year_ID==5~NA_integer_,
+                   TRUE~deaths),
+  ID=row_number()
+) 
+dataprov_female=merge(dataprov_female,(prov.shp@data %>% select(Province,ID_area)),
+                      by.x="Province",by.y="Province",sort=F)
+
+## Save the data sets for use in the INLA model
+save(dataprov_male, dataprov_female, file="BYMM_dataprovs.RData")
+
+## Load appropriate packages for running the INLA model
+library(INLA)
+library(parallel) # for parallel computing - speeds up the running model
+
+## Set graph used in spatial effect to the appropriate Italian province graph
+graph = paste0("province_graph.graph")
+
+## Create formula for the linear predictor
+formula = 
+  deaths ~                          # outcome (# of deaths by province/week/year)
+  
+  1 +                               # intercept term
+                                    # set approproate hyperprior distributions
+                                    # spatial effect (BYM model)
+  f(ID_area,model="bym",graph=graph,scale.model=T,          
+    hyper=list(theta1=list(prior="loggamma",param=c(1,0.1)),theta2=list(prior="loggamma",
+                                                                        param=c(1,0.1)))) +
+  f(Year_ID,model="iid") +          # year effect
+                                    # temporal effect by week/region (RW1 model) 
+  f(week,model="rw1",replicate=COD_REG,             
+    scale.model=TRUE,hyper=list(
+      prec=list(prior="loggamma",
+                param=c(1,0.1))
+    )
+  ) +
+                                    # effect of temperature (RW2 model)
+  f(IDtemp,model="rw2",scale.model=TRUE,            
+    hyper=list(
+      theta=list(prior="loggamma",param=c(1,0.1))
+    )
+  ) 
+
+## INLA model 
+
+## Run male or female model by setting sex below and using the appropriate dataprov_sex 
+## in the INLA() (and other) arguments
+sex = ""     #choices: 'male' or 'female'
+
+## Set distribution to Poisson for the family argument in the INLA model
+family="poisson"
+
+## Run the model and save output in object 'm'
+m = inla(formula=formula,                     # specify model formula (made above)
+         data=dataprov_female,                # use the data (either male or female data)
+         E=dataprov_female$expected,          # specify the offset (expected deaths)
+         family=family,                       # tell INLA to use a Poisson model (specified above)
+         verbose=TRUE,                        # show all the messages
+         num.threads=round(parallel::detectCores()*.8),
+                                              # parallel computing using 80% of the available CPUs
+         control.compute=list(config=TRUE),   # compute the model fitting stats (DIC, WAIC etc.)
+         control.predictor=list(compute=TRUE) # predict the "missing" death values = those in 2020
+         # NB: stores the linear predictor too.
+)
+
+## Make simulations from the posterior distributions
+
+## Set number of simulations to draw from approximate joint posterior 
+nsim=1000
+
+## Ensure the dataprov_sex is set to the sex being looked at 
+post.samp=inla.posterior.sample(n=nsim,       # number of simulations (specified above)
+                                result=m,     # INLA object with the model fit
+                                selection=list(                        
+                                              # selects the parameters for which simulations should be done
+                                  "Predictor"= dataprov_female %>%     
+                                              # picks up only the "missing" observations
+                                    filter(is.na(deaths)) %>% pull(ID) 
+                                              # values for 2020 in each province and each week
+                                ),
+                                num.threads=round(detectCores()*.8),   
+                                              # use 80% of computer's CPUs to speed up computation
+                                verbose=FALSE # do not show messages from INLA
+)
+
+## Take exponential of the simulations to obtain rho values and put into a matrix format 
+## with numbered 'simulation' column names
+eta=exp(matrix(unlist(lapply(post.samp,function(x) x$latent[1:nrow(post.samp[[1]]$latent),])),
+               nrow=nrow(post.samp[[1]]$latent),byrow=F))
+colnames(eta)=paste0("simulation",1:nsim)
+
+## Multiply values in eta by the expected deaths  (mu = eta*E = mean of the Poisson)
+mu=eta*dataprov_female %>% filter(is.na(deaths)) %>% pull(expected) 
+
+## Sample from a Poisson distribution with mean 'mu' to obtain samples from the 
+## predictive distribution
+preds=matrix(rpois(length(mu),mu),nrow=nrow(mu),ncol=ncol(mu))
+
+## Keep colnames as numbered simulations
+colnames(preds)=colnames(mu)
+
+## Create data-frame with the original variables about data and the newly predicted values
+prediction=dataprov_female %>% filter(is.na(deaths)) %>% bind_cols(as_tibble(preds)) %>%
+  select(-deaths) %>% select(ID,everything())
+
+## Save dataset and repeat for the other sex
+save(prediction, eta, mu, preds, dataprov_female ,data, m, macro.regions,
+     file = paste0("BYMM_",sex,".RData"))
+
+## STEP 2: Post-processing, preparing data for visualisation e.g. computing sample
+## statistics and excess mortality
+
+## Select the sex wanting to look at
+sex = 'male' # or 'female
+
+## Load the data frame from STEP 1 which includes the mortality predictions
+load(paste0("BYMM_",sex, ".RData"))
+
+## Add population from official data and extrapolation at 2020
+pop.tot=as_tibble(read.table("./p20_att.txt",header = TRUE))
+
+## Aggregate by age group
+pop.tot=pop.tot %>% rename(COD_PROVCOM=PRO_COM_ATT) %>% group_by(COD_PROVCOM) %>% 
+  mutate(Total.male=sum(n_m),Total.female=sum(n_f)) %>% 
+  slice(1) %>% ungroup() %>% select(COD_PROVCOM,contains("Total"))
+
+## pop.tot has no identical columns to be able to join pred.italy, so join variables: Province, 
+## Prov_abbr and COD_PROVOCOM from 'data' object
+comune_and_provinces = data %>% group_by(DEN_UTS) %>% 
+  select(c(COD_PROVCOM, COMUNE, COD_PROV, DEN_UTS)) %>% 
+  rename(Province = DEN_UTS) %>% distinct()
+pop.tot = pop.tot %>% left_join(comune_and_provinces) %>% 
+  select(c(COD_PROV, Province, Total.female, Total.male))
+provinces = comune_and_provinces[3:4] %>% group_by(COD_PROV)
+
+## Sum up population for females, males and all within Provinces
+pop.tot = pop.tot %>% group_by(Province) %>% 
+  summarize_at(vars(-COD_PROV),sum, na.rm=TRUE)
+pop.tot = pop.tot[-108,]
+pop.tot = pop.tot %>% mutate(Total.all = Total.male + Total.female) %>% 
+  select(Province, Total.female, Total.male, Total.all)
+
+## Save file for use later on
+save(pop.tot, file= "simpler_model_poptot.RData")
+
+require(dplyr)
+
+## SMR = mortality divided by population then multiplied by 100,000 people. 
+## Create SMR object (code not included)
+## Create a pred.italy object which lists SMR and prediction objects
+pred.italy = list(SMR=SMR, 
+                  prediction=prediction) 
+
+## Remove records that don't have values in the simulations (provinces that don't
+## match 2016-2019 data)
+## Make 'week' a numeric variable (not a factor)
+pred.italy$SMR=pred.italy$SMR %>% filter(!is.na(observed)) %>%
+  mutate(week=as.numeric(as.character(week)))
+pred.italy$prediction=pred.italy$prediction %>% filter(!is.na(observed)) %>% 
+  mutate(week=as.numeric(as.character(week)))
+
+## Calculate summary statistics for the 1000 simulations in each row
+pred.italy$prediction=pred.italy$prediction %>% 
+  mutate(mean=apply(as.matrix(pred.italy$prediction %>% 
+                                select(contains("simulation"))),1,mean,na.rm=TRUE),
+         median=apply(as.matrix(pred.italy$prediction %>% 
+                                  select(contains("simulation"))),1,median,na.rm=TRUE),
+         sd=apply(as.matrix(pred.italy$prediction %>% 
+                              select(contains("simulation"))),1,sd,na.rm=TRUE),
+         low=apply(as.matrix(pred.italy$prediction %>% 
+                               select(contains("simulation"))),1,quantile,.025,na.rm=TRUE),
+         upp=apply(as.matrix(pred.italy$prediction %>% 
+                               select(contains("simulation"))),1,quantile,.975,na.rm=TRUE)) %>% 
+  select(COD_PROV,Province,Prov_abbr,Region,COD_REG,week,observed,expected,sex,mean,sd,low,median,
+         upp, everything())
+
+## Aggregate SMR by region since my data is aggregated at province level
+pred.italy$SMR_reg=(pred.italy$SMR %>% group_by(Region,week) %>% arrange(COD_REG,week) %>% slice(1) %>% 
+                      select(COD_PROV,Province,Prov_abbr,Region,COD_REG,Year_ID,week) %>% ungroup()) %>% 
+  bind_cols(pred.italy$SMR %>% group_by(Region,week) %>% arrange(week) %>% 
+              summarise_at(vars("observed",starts_with("simulation")),funs(mean)) %>% ungroup()) %>%
+  select(-c(Region...4, week...7)) %>% rename(week=week...9, Region=Region...8)
+
+## Obtain summary stats for 1000 simulations in each row at region level
+pred.italy$SMR_reg=pred.italy$SMR_reg %>% 
+  mutate(mean=apply(as.matrix(pred.italy$SMR_reg %>% 
+                                select(starts_with("simulation"))),1,mean,na.rm=TRUE),
+         median=apply(as.matrix(pred.italy$SMR_reg %>% 
+                                  select(starts_with("simulation"))),1,median,na.rm=TRUE),
+         sd=apply(as.matrix(pred.italy$SMR_reg %>% 
+                              select(starts_with("simulation"))),1,sd,na.rm=TRUE),
+         low=apply(as.matrix(pred.italy$SMR_reg %>%
+                               select(starts_with("simulation"))),1,quantile,.025,na.rm=TRUE),
+         upp=apply(as.matrix(pred.italy$SMR_reg %>% 
+                               select(starts_with("simulation"))),1,quantile,.975,na.rm=TRUE)) %>% 
+  select(COD_PROV,Province,Prov_abbr,Region,COD_REG,Year_ID,week,observed,
+         mean,sd,low,median,upp,everything())
+
+## Aggregate mortality predictions by region since data is at province level
+pred.italy$prediction_reg=(pred.italy$prediction %>% group_by(Region,week) %>% 
+                             arrange(COD_REG,week) %>% slice(1) %>% 
+                             select(COD_PROV,Province,Prov_abbr,Region,COD_REG,Year_ID,week) %>%
+                             ungroup()) %>% 
+  bind_cols(pred.italy$prediction %>% group_by(Region,week) %>% 
+              arrange(COD_REG,week) %>% 
+              summarise_at(vars("observed",starts_with("simulation")),funs(sum)) %>%
+              ungroup()) %>% select(-c(week...7,Region...4)) %>% 
+  rename(week=week...9,Region=Region...8) 
+
+## Obtain summary statistics for 1000 simulation in each row at region level
+pred.italy$prediction_reg=pred.italy$prediction_reg %>% 
+  mutate(mean=apply(as.matrix(pred.italy$prediction_reg %>%
+                                select(contains("simulation"))),1,mean,na.rm=TRUE),
+         median=apply(as.matrix(pred.italy$prediction_reg %>%
+                                  select(contains("simulation"))),1,median,na.rm=TRUE),
+         sd=apply(as.matrix(pred.italy$prediction_reg %>%
+                              select(contains("simulation"))),1,sd,na.rm=TRUE),
+         low=apply(as.matrix(pred.italy$prediction_reg %>% 
+                               select(contains("simulation"))),1,quantile,.025,na.rm=TRUE),
+         upp=apply(as.matrix(pred.italy$prediction_reg %>% 
+                               select(contains("simulation"))),1,quantile,.975,na.rm=TRUE)) %>% 
+  select(COD_PROV,Province,Prov_abbr,Region,COD_REG,Year_ID,week,observed,mean,
+         sd,low,median,upp,everything())
+
+## Create excess mortality rate for the province and region level matrices by subtracting 
+## the observed mortality for each row from all simulations in that row
+xs=-1*sweep(as.matrix(pred.italy$prediction_reg %>% select(contains("simulation"))),
+            1,pred.italy$prediction_reg$observed,FUN ="-")
+xs=sweep(as.matrix(xs),1,pred.italy$prediction_reg$observed,FUN ="/")
+colnames(xs)=stringr::str_replace(colnames(xs),"simulation","xs")
+
+## Combine matrix of excess mortality rate simulations with the original data
+pred.italy$prediction_reg=pred.italy$prediction_reg %>% bind_cols(as_tibble(xs)) 
+
+## Obtain summary statistics of the excess mortality rate simulations
+pred.italy$prediction_reg=pred.italy$prediction_reg %>% mutate(
+  mean.excess=apply(as.matrix(pred.italy$prediction_reg %>% 
+                                select(contains("xs"))),1,mean,na.rm=T),
+  sd.excess=apply(as.matrix(pred.italy$prediction_reg %>% 
+                              select(contains("xs"))),1,sd,na.rm=T),
+  low.excess=apply(as.matrix(pred.italy$prediction_reg %>% 
+                               select(contains("xs"))),1,quantile,.025,na.rm=T),
+  upp.excess=apply(as.matrix(pred.italy$prediction_reg %>% 
+                               select(contains("xs"))),1,quantile,.975,na.rm=T)
+) %>% select(COD_PROV,Province,Prov_abbr,Region,COD_REG,Year_ID,week,observed,mean.excess,
+             sd.excess,low.excess,upp.excess,everything())
+
+## Repeat process at province level
+xs=-1*sweep(as.matrix(pred.italy$prediction %>% select(contains("simulation"))),
+            1,pred.italy$prediction$observed,FUN ="-")
+xs=sweep(as.matrix(xs),1,pred.italy$prediction$observed,FUN ="/")
+colnames(xs)=stringr::str_replace(colnames(xs),"simulation","xs")
+pred.italy$prediction=pred.italy$prediction %>% bind_cols(as_tibble(xs)) 
+pred.italy$prediction=pred.italy$prediction %>% 
+  mutate(
+    mean.excess=apply(as.matrix(pred.italy$prediction %>% 
+                                  select(contains("xs"))),1,mean,na.rm=T),
+    sd.excess=apply(as.matrix(pred.italy$prediction %>% 
+                                select(contains("xs"))),1,sd,na.rm=T),
+    low.excess=apply(as.matrix(pred.italy$prediction %>% 
+                                 select(contains("xs"))),1,quantile,.025,na.rm=T),
+    upp.excess=apply(as.matrix(pred.italy$prediction %>% 
+                                 select(contains("xs"))),1,quantile,.975,na.rm=T)
+  ) %>% select(COD_PROV,Province,Prov_abbr,Region,COD_REG,Year_ID,week,observed,expected,sex,mean,
+               sd,low,median,upp,mean.excess,sd.excess,low.excess,upp.excess,everything())
+
+## Load population data created earlier
+load("simpler_model_poptot.RData")
+
+## Join population data with the mortality predictions data object
+pred.italy$prediction=pred.italy$prediction %>% left_join(pop.tot) %>% 
+  select(COD_PROV, Province, Total.male, Total.female, everything()) %>% 
+  mutate(mean.excess=case_when(observed==0~NA_real_,
+                               TRUE~mean.excess),
+         sd.excess=case_when(observed==0~NA_real_,
+                             TRUE~sd.excess),
+         low.excess=case_when(observed==0~NA_real_,
+                              TRUE~low.excess),
+         upp.excess=case_when(observed==0~NA_real_,
+                              TRUE~upp.excess)
+  )
+
+## Save the data list and repeat for the other sex
+save(pred.italy,file=paste0("BYMM_preditaly_", sex, ".RData"))
+
+## STEP 3: Run all formulas for plots and maps
+
+## Plots the predicted deaths by comune & week
+vis.province=function(pred,province,...) {
+  require(ggplot2)
+  rg=range((pred$prediction %>% filter(Province==province) %>% 
+              arrange(week) %>% select(mean,observed))) 
+  dates=as.Date("2020-01-01")
+  for (i in 2:max(pred$prediction$week)) {
+    dates[i]=dates[(i-1)]+7
+  }
+  dates=format(dates,format="%d%b")
+  theme_set(theme_bw())
+  ggplot(pred$prediction %>% filter(Province==province) %>% 
+           arrange(week),aes(week,mean)) + 
+    geom_line(aes(y=mean),color="blue") + 
+    geom_ribbon(aes(ymin=low,ymax=upp),alpha=.2) +
+    scale_x_continuous("Week", breaks=1:length(dates), labels=dates) +
+    geom_point(data=pred$prediction %>% filter(Province==province) %>% 
+                 arrange(week),aes(week,observed),color="red") +
+    geom_line(data=pred$prediction %>% filter(Province==province) %>% 
+                arrange(week),aes(week,observed),color="red") +
+    theme(axis.text.x = element_text(color="black",size=13,angle=0,hjust=.5,vjust=.5,face="plain"),
+          axis.text.y = element_text(color="black",size=13,angle=0,hjust=.5,vjust=.5,face="plain"),  
+          axis.title.x = element_text(color="black",size=14,angle=0,hjust=.5,vjust=.5,face="plain"),
+          axis.title.y = element_text(color="black",size=14,angle=90,hjust=.5,vjust=.5,face="plain")) +
+    labs(y="All causes deaths",title=paste0("Province of ",province," (",
+                                            (pred$prediction %>% filter(Province==province))$Region,")")) +
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank(),
+          plot.title = element_text(size=18)) +
+    geom_point(shape=20,colour="red",size=3,aes(x=.92,y=rg[2]*1.035)) +
+    annotate(geom="segment",x=.8,y=rg[2]*1.052,xend=1.04,yend=rg[2]*1.052,color="grey",size=3) +
+    annotate(geom="segment",x=.8,y=rg[2]*1.048,xend=1.04,yend=rg[2]*1.048,color="grey",size=3) +
+    annotate(geom="segment",x=.8,y=rg[2]*1.05,xend=1.04,yend=rg[2]*1.05,color="blue",size=.8) +
+    annotate(geom="text",x=1.15,y=rg[2]*1.05,label="Predicted deaths (mean and 95% interval)",
+             size=5,vjust=.5,hjust=0) +
+    annotate(geom="text",x=1.15,y=rg[2]*1.035,label="Observed deaths",size=5,vjust=.5,hjust=0)
+}
+
+## Plots mortality rate at province level
+vis.rate=function(pred,province,...) {
+  # pred = a list with the model predictions
+  # province = a string or a vector of strings with the names of the province(s) to plot
+  exArgs=list(...)
+  if(exists("title",exArgs)){title=exArgs$title} 
+  else {title=paste0("Province of ",province," (",(pred$prediction %>% filter(Province==province))$Region,")")}
+  if(exists("scale",exArgs)){scale=exArgs$scale} else {scale=100000}
+  
+  require(ggplot2)
+  dates=as.Date("2020-01-01")
+  for (i in 2:max(pred$prediction$week)) {
+    dates[i]=dates[(i-1)]+7
+  }
+  dates=format(dates,format="%e\n%b")
+  if(sex=="male"){
+    pred$prediction=pred$prediction %>% mutate(Total=Total.male)
+  } else {
+    pred$prediction=pred$prediction %>% mutate(Total=Total.female)
+  }
+  
+  datatemp=pred$prediction %>% filter(Province==province) %>% arrange(week) %>% 
+    mutate(rate=mean/Total*scale,rate.low=low/Total*scale,rate.upp=upp/Total*scale,
+           rateobserved=observed/Total*scale)
+  # Defines plot range
+  rg=range(datatemp %>% select(rate.low,rate.upp,rateobserved))
+  
+  # Make the plot
+  theme_set(theme_bw())
+  pl=ggplot(data=datatemp,aes(week,rate)) + 
+    geom_line(aes(y=rate),color="blue") + 
+    geom_ribbon(aes(ymin=rate.low,ymax=rate.upp),alpha=.2) +
+    scale_x_continuous("Week", breaks=1:length(dates), labels=dates) 
+  if(exists("ylim",exArgs)){
+    rg=exArgs$ylim; rg[2]=rg[2]*1.055
+    pl+scale_y_continuous(limits=rg)
+  }
+  pl+geom_point(data=datatemp,aes(week,rateobserved),color="red") +
+    geom_line(data=datatemp,aes(week,rateobserved),color="red") +
+    theme(axis.text.x = element_text(color="black",size=10,angle=0,hjust=.5,
+                                     vjust=.5,face="bold", family="Times"),
+          axis.text.y = element_text(color="black",size=10,angle=0,hjust=.5,
+                                     vjust=.5,face="bold", family="Times"),  
+          axis.title.x = element_text(color="black",size=11,angle=0,hjust=.5,
+                                      vjust=.5,face="bold", family="Times"),
+          axis.title.y = element_text(color="black",size=11,angle=90,hjust=.5,
+                                      vjust=.5,face="bold", family="Times")) +
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank(),
+          plot.title = element_text(size=10, face="bold", family="Times")) + 
+    labs(y=paste0("Mortality rate for all causes (x",format(scale,big.mark=",",scientific=999),")"),
+         title=title) +
+    geom_point(shape=20,colour="red",size=3,aes(x=.92,y=rg[2]*1.01)) +
+    annotate(geom="segment",x=.8,y=rg[2]*1.052,xend=1.04,yend=rg[2]*1.052,color="grey",size=3) +
+    annotate(geom="segment",x=.8,y=rg[2]*1.048,xend=1.04,yend=rg[2]*1.048,color="grey",size=3) +
+    annotate(geom="segment",x=.8,y=rg[2]*1.05,xend=1.04,yend=rg[2]*1.05,color="blue",size=.8) +
+    annotate(geom="text",x=1.15,y=rg[2]*1.05,family="Times",
+             label=paste0("Predicted mortality rate x",format(scale,big.mark=",",scientific=999),
+                          " (mean and 95% interval)"),size=3.8,vjust=.5,hjust=0) +
+    annotate(geom="text",x=1.15,y=rg[2]*1.01,family="Times",
+             label=paste0("Observed mortality rate x" ,format(scale,big.mark=",",scientific=999)),
+             size=3.8,vjust=.5,hjust=0)+
+    coord_cartesian(ylim = c(rg[1],rg[2]*1.05)) 
+}
+
+## Plot excess mortality rate at province level  
+vis.xs.rate=function(pred,province,...) { 
+  require(ggplot2)
+  dates=as.Date("2020-01-01")
+  for (i in 2:max(pred$prediction$week)) {
+    dates[i]=dates[(i-1)]+7
+  }
+  dates=format(dates,format="%e\n%b")
+  
+  # Defines plot range
+  rg=100*range((pred$prediction %>% filter(Province==province) %>% arrange(week) %>%
+                  select(low.excess,mean.excess)),na.rm=TRUE)
+  
+  # Make the plot
+  theme_set(theme_bw())
+  ggplot(pred$prediction %>% filter(Province==province) %>% arrange(week),
+         aes(week,100*mean.excess)) + 
+    geom_line(aes(y=100*mean.excess),color="blue") + 
+    geom_ribbon(aes(ymin=100*low.excess,ymax=100*upp.excess),alpha=.2) +
+    scale_y_continuous("Percentage excess mortality",breaks=seq(-200,100,by=50),
+                       labels=seq(-200,100,by=50),limits=c(-290,105)) +
+    scale_x_continuous("Week", breaks=1:length(dates), labels=dates) +
+    geom_hline(yintercept=0,size=.8, linetype="dashed") +
+    geom_hline(yintercept=50,size=.8, linetype="dashed",color="red") +
+    geom_hline(yintercept=100,size=.8, linetype="dashed",color="red") +
+    theme(axis.text.x = element_text(color="black",size=10,angle=0,hjust=.5,
+                                     vjust=.5,face="bold", family="Times"),
+          axis.text.y = element_text(color="black",size=10,angle=0,hjust=.5,
+                                     vjust=.5,face="bold", family="Times"),  
+          axis.title.x = element_text(color="black",size=11,angle=0,hjust=.5,
+                                      vjust=.5,face="bold", family="Times"),
+          axis.title.y = element_text(color="black",size=11,angle=90,hjust=.5,
+                                      vjust=.5,face="bold", family="Times")) +
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank(),
+          plot.title = element_text(size=12, face="bold", family="Times")) +
+    labs(y="Percentage excess mortality",title=paste0("Province of ",
+                                                      province," (",(pred$prediction %>% filter(Province==province))$Region,")")) +
+    annotate(geom="text",x=1,y=50,label="1.5-fold increase",size=3.8,vjust=-1,hjust=0,family="Times") +
+    annotate(geom="text",x=1,y=100,label="2-fold increase",size=3.8,vjust=-1,hjust=0,family="Times") +
+    coord_cartesian(ylim = c(-100,105)) 
+}
+
+## Plots SMR at province level 
+plot.smr=function(pred,province) {
+  require(ggplot2)
+  dates=as.Date("2020-01-01")
+  for (i in 2:max(pred$prediction$week)) {
+    dates[i]=dates[(i-1)]+7
+  }
+  dates=format(dates,format="%d%b")
+  rg=range(pred$SMR %>% filter(Province==province) %>% arrange(week) %>% 
+             mutate(rate=observed/expected) %>% select(smr.mean,rate))
+  theme_set(theme_bw())
+  ggplot(pred$SMR %>% filter(Province==province) %>% arrange(week),aes(week,smr.mean)) + 
+    geom_line(aes(y=mean),color="blue") + 
+    geom_ribbon(aes(ymin=smr.low,ymax=smr.upp),alpha=.2) +
+    scale_x_continuous("Week", breaks=1:length(dates), labels=dates) +
+    geom_point(data=pred$SMR %>% filter(Province==province) %>% arrange(week) %>% 
+                 mutate(rate=observed/expected),aes(week,rate),color="red") +
+    geom_line(data=pred$SMR %>% filter(Province==province) %>% arrange(week) %>%
+                mutate(rate=observed/expected),aes(week,rate),color="red") +
+    theme(axis.text.x = element_text(color="black",size=13,angle=0,hjust=.5,vjust=.5,face="plain"),
+          axis.text.y = element_text(color="black",size=13,angle=0,hjust=.5,vjust=.5,face="plain"),  
+          axis.title.x = element_text(color="black",size=14,angle=0,hjust=.5,vjust=.5,face="plain"),
+          axis.title.y = element_text(color="black",size=14,angle=90,hjust=.5,vjust=.5,face="plain")) +
+    labs(y="Standardised Mortality Ratio",title=paste0("Province of ",
+                                                       province," (",(pred$prediction %>% filter(Province==province))$Region,")")) +
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank(),
+          plot.title= element_text(size=18)) +
+    geom_point(shape=20,colour="red",size=3,aes(x=1.0,y=rg[2]*1.035)) +
+    annotate(geom="segment",x=.8,y=rg[2]*1.052,xend=1.04,yend=rg[2]*1.052,color="grey",size=3) +
+    annotate(geom="segment",x=.8,y=rg[2]*1.048,xend=1.04,yend=rg[2]*1.048,color="grey",size=3) +
+    annotate(geom="segment",x=.8,y=rg[2]*1.05,xend=1.04,yend=rg[2]*1.05,color="blue",size=.8) +
+    annotate(geom="text",x=1.15,y=rg[2]*1.05,label="Predicted SMR (mean and 95% interval)",
+             size=5,vjust=.5,hjust=0) +
+    annotate(geom="text",x=1.15,y=rg[2]*1.035,label="Observed SMR",size=5,vjust=.5,hjust=0)
+}
+
+## Load library needed for plotting spatial data
+library(rgdal)
+prov.shp = readOGR(dsn = "./Prov", layer = "Prov")
+reg = prediction[,c("Region", "Province")]
+
+## Include region with the spatial data
+prov.shp@data = prov.shp@data %>% rename(Province = DEN_UTS, Prov_abbr = SIGLA) %>% left_join(reg) 
+reg.shp = readOGR(dsn = "./Reg", layer = "Reg")                                                         
+prov.name<- prov.shp@data[,c("COD_PROV","Province", "Prov_abbr")] 
+reg.name<- reg.shp@data[,c("COD_REG","DEN_REG")]  %>% rename(Region=DEN_REG)
+
+
+# Function to make percentage excess mortality maps
+make.map=function(w,pred,labels=FALSE,...) {
+  exArgs=list(...)
+  
+  # Make map using ggplot
+  require(ggplot2)
+  toplot=prov.shp
+  toplot@data = toplot@data %>% distinct()
+  toplot@data=as_tibble(toplot@data %>% mutate(COD_REG=as.numeric(as.character(COD_REG)),
+                                               COD_PROV=as.numeric(as.character(COD_PROV)))) %>%
+    left_join(pred$prediction %>% filter(week==w) %>%
+                # Need to recode the COD_PROV for the 4 new provinces to merge
+                mutate(COD_PROV=case_when(
+                  COD_PROV==104~108,
+                  COD_PROV==105~109,
+                  COD_PROV==106~110,
+                  COD_PROV==107~111,
+                  TRUE~as.numeric(COD_PROV)))
+    )
+  
+  ###############################################################################################
+  ### Force mean.excess < -1 to be exactly -1 (this makes the range of the values easier 
+  ## to present in the graph)   
+  toplot@data=toplot@data %>% mutate(mean.excess=case_when(mean.excess < -1~-1,TRUE~mean.excess))                   
+  ################################################################################################
+  
+  # This only active is needs to subset for regions
+  if(exists("region",exArgs)){
+    toplot=toplot[toplot@data$Region%in%exArgs$region,]
+  }
+  
+  theme_set(theme_bw())
+  dates=as.Date("2020-01-01")
+  for (i in 2:max(pred$prediction$week)) {
+    dates[i]=dates[(i-1)]+7
+  }
+  dates=c(dates,dates[length(dates)]+7)
+  shades=colorRampPalette(c("dodgerblue2","white","red3"))
+  pl=ggplot(data=sf::st_as_sf(toplot,coords=c(SHAPE_AREA,SHAPE_LEN))) +
+    geom_sf()+
+    geom_sf(data = sf::st_as_sf(toplot,coords=c(SHAPE_AREA,SHAPE_LEN)), aes(fill = 100*mean.excess),
+            ## Controls thickness of the borders
+            size=.2) +
+    ## Also plot the regions borders on top of the provinces
+    geom_sf(data = sf::st_as_sf(toplot,coords=c(SHAPE_AREA,SHAPE_LEN)) %>% group_by(COD_REG) %>% 
+              summarise(),            
+            fill="transparent",color="gray20",size=0.3) +
+    theme(axis.line=element_blank(),axis.text.x=element_blank(),
+          axis.text.y=element_blank(),axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),
+          axis.title=element_text(size=10,face="bold", family="Times"),
+          plot.title=element_text(size=10,face="bold",family="Times"),
+          legend.title=element_text(size=10,face="bold",family="Times"),
+          legend.text=element_text(size=8,family="Times")) +
+    scale_fill_gradientn(
+      colours=shades(20),
+      name="Percentage excess mortality ",
+      na.value = "grey100",
+      limits=c(-100,100)
+    ) +  
+    ggtitle(paste0(format(dates[w],format="%e %B")," -",format(dates[w+1]-1,format="%e %B")))
+  if(labels==TRUE) {
+    pl=pl+geom_sf_label(data = sf::st_centroid(sf::st_as_sf(toplot,coords=c(SHAPE_AREA,SHAPE_LEN)) %>%
+                                            group_by(Region) %>% summarise()),aes(label=Region), size=1.5)
+  }
+  if(exists("legend",exArgs)){
+    pl=pl+theme(legend.position=exArgs$legend)
+  }
+  pl
+}
+
+## Maps of SMR across weeks and regions
+make.smr.map=function(w,pred,labels=FALSE,...) {
+  exArgs=list(...)
+  
+  # Make map using ggplot
+  require(ggplot2)
+  toplot=prov.shp
+  toplot@data = toplot@data %>% distinct()
+  toplot@data=as_tibble(toplot@data %>% mutate(COD_REG=as.numeric(as.character(COD_REG)),
+                                               COD_PROV=as.numeric(as.character(COD_PROV)))) %>%
+    left_join(pred$SMR %>% filter(week==w) %>%
+                # Need to recode the COD_PROV for the 4 new provinces 
+                mutate(COD_PROV=case_when(
+                  COD_PROV==104~108,
+                  COD_PROV==105~109,
+                  COD_PROV==106~110,
+                  COD_PROV==107~111,
+                  TRUE~as.numeric(COD_PROV)))
+    )
+  
+  #################################################################################################
+  ### Force mean.excess < -1 to be exactly -1 (this makes the range of the values easier to 
+  ## present in the graph)
+  #################################################################################################
+  
+  if(exists("region",exArgs)){
+    toplot=toplot[toplot@data$Region%in%exArgs$region,]
+  }
+  
+  theme_set(theme_bw())
+  dates=as.Date("2020-01-01")
+  for (i in 2:max(pred$SMR$week)) {
+    dates[i]=dates[(i-1)]+7
+  }
+  dates=c(dates,dates[length(dates)]+7)
+  shades=colorRampPalette(c("dodgerblue2","white","red3"))
+  pl=ggplot(data=sf::st_as_sf(toplot,coords=c(SHAPE_AREA,SHAPE_LEN))) +
+    geom_sf()+
+    geom_sf(data = sf::st_as_sf(toplot,coords=c(SHAPE_AREA,SHAPE_LEN)), aes(fill = smr.observed),
+            ## Controls the thickness of the borders
+            size=.2) +
+    geom_sf(data = sf::st_as_sf(toplot,coords=c(SHAPE_AREA,SHAPE_LEN)) %>% group_by(COD_REG) %>% 
+              summarise(),            
+            fill="transparent",color="gray20",size=0.3) +
+    theme(axis.line=element_blank(),axis.text.x=element_blank(),
+          axis.text.y=element_blank(),axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),
+          axis.title=element_text(size=10,face="bold", family="Times"),
+          plot.title=element_text(size=10,face="bold",family="Times"),
+          legend.title=element_text(size=10,face="bold",family="Times"),
+          legend.text=element_text(size=8,family="Times")) +
+    scale_fill_gradientn(
+      colours=shades(20),
+      name="Standardized mortality ratio ",
+      na.value = "grey100",
+      limits=c(15,50)
+    ) +  
+    ggtitle(paste0(format(dates[w],format="%e %B")," -",format(dates[w+1]-1,format="%e %B")))
+  if(labels==TRUE) {
+    pl=pl+geom_sf_label(data = sf::st_centroid(sf::st_as_sf(toplot,coords=c(SHAPE_AREA,SHAPE_LEN)) %>%
+                                           group_by(Region) %>% summarise()),aes(label=Region), size=1.5)
+  }
+  if(exists("legend",exArgs)){
+    pl=pl+theme(legend.position=exArgs$legend)
+  }
+  pl
+}
+
+## Compares observed and predicted all-cause mortality  
+vis.trends=function(pred,region,...) {
+  # pred = a list with the model predictions
+  # region = a string or a vector of strings with the names of the region(s) to plot
+  exArgs=list(...)
+  if(exists("quants",exArgs)){q=exArgs$quants} else {q=c(.025,.975)}
+  if(exists("title",exArgs)){title=exArgs$title} else {title=paste0(region,collapse=", ")}
+  
+  require(ggplot2)
+  # creates temporary dataset with only the relevant regions
+  datatemp=pred$prediction_reg %>% filter(Region %in% region) %>% arrange(week) 
+  datatemp=datatemp %>% 
+    mutate(low=apply(as.matrix(datatemp %>% select(contains("simulation"))),1,quantile,q[1]),
+           upp=apply(as.matrix(datatemp %>% select(contains("simulation"))),1,quantile,q[2]))
+  # if more than one region, then sum up the numbers
+  if(length(region)>1) {
+    datatemp=datatemp %>% group_by(week) %>% 
+      summarise_at(vars("observed",starts_with("simulation")),funs(sum)) %>% ungroup()
+    datatemp=datatemp %>% 
+      mutate(mean=apply(as.matrix(datatemp %>% select(contains("simulation"))),1,mean),
+             median=apply(as.matrix(datatemp %>% select(contains("simulation"))),1,median),
+             sd=apply(as.matrix(datatemp %>% select(contains("simulation"))),1,sd),
+             low=apply(as.matrix(datatemp %>% select(contains("simulation"))),1,quantile,q[1]),
+             upp=apply(as.matrix(datatemp %>% select(contains("simulation"))),1,quantile,q[2])) %>% 
+      select(week,observed,mean,sd,low,median,upp,everything())
+  }
+  
+  rg=range((datatemp %>% select(low,upp,observed)))
+  
+  dates=as.Date("2020-01-01")
+  for (i in 2:max(pred$prediction$week)) {
+    dates[i]=dates[(i-1)]+7
+  }
+  dates=format(dates,format="%d-%b")
+  
+  theme_set(theme_bw())
+  pl=ggplot(datatemp,aes(week,mean)) + 
+    geom_line(aes(y=mean),color="blue") + 
+    geom_ribbon(aes(ymin=low,ymax=upp),alpha=.2) +
+    scale_x_continuous("Week", breaks=1:length(dates), labels=dates) 
+  if(exists("ylim",exArgs)){
+    rg=exArgs$ylim; rg[2]=rg[2]*1.055
+    pl+scale_y_continuous(limits=rg)
+  }
+  pl + geom_point(data=datatemp,aes(week,observed),color="red") +
+    geom_line(data=datatemp,aes(week,observed),color="red") +
+    theme(axis.text.x = element_text(color="black",size=13,angle=0,hjust=.5,vjust=.5,face="plain"),
+          axis.text.y = element_text(color="black",size=13,angle=0,hjust=.5,vjust=.5,face="plain"),  
+          axis.title.x = element_text(color="black",size=14,angle=0,hjust=.5,vjust=.5,face="plain"),
+          axis.title.y = element_text(color="black",size=14,angle=90,hjust=.5,vjust=.5,face="plain")) +
+    labs(y="All causes deaths",title=title) +
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank(),
+          plot.title = element_text(size=18)) +
+    geom_point(shape=20,colour="red",size=3,aes(x=.92,y=rg[2]*1.015)) +
+    annotate(geom="segment",x=.8,y=rg[2]*1.052,xend=1.04,yend=rg[2]*1.052,color="grey",size=3) +
+    annotate(geom="segment",x=.8,y=rg[2]*1.048,xend=1.04,yend=rg[2]*1.048,color="grey",size=3) +
+    annotate(geom="segment",x=.8,y=rg[2]*1.05,xend=1.04,yend=rg[2]*1.05,color="blue",size=.8) +
+    annotate(geom="text",x=1.15,y=rg[2]*1.05,label=paste0("Predicted deaths (mean and ",100*(q[2]-q[1]),
+                                                          "% interval)"),
+             size=5,vjust=.5,hjust=0) +
+    annotate(geom="text",x=1.15,y=rg[2]*1.015,label="Observed deaths",size=5,vjust=.5,hjust=0) + 
+    geom_vline(xintercept=(10+5/7),linetype="dashed",color="black",size=.6) + 
+    annotate(geom="text",x=(10+4.5/7),y=rg[2]*.85,label="Italy goes in \nlockdown on 9 March",size=3.8,
+             vjust=0,hjust=1, family="Times", face="bold") + 
+    # Add this to ensure multiple graphs in grid.arrange have the same scale
+    # source: https://stackoverflow.com/questions/41768273/create-ggplots-with-the-same-scale-in-r
+    coord_cartesian(ylim = c(rg[1],rg[2]*1.05)) 
+}
+
+## STEP 4: Output plots and map of desired provinces, regions and macroareas
+
+## Make selections on sex, macroarea and model type to look at (helps for organising the saved 
+## plot files)
+area = ""            # possible choices: "NordEst", "Sud", "Centro", "Lombardia", "NordOvest"
+sex = ""             # possible choices: "female", "male"
+model_type = ""      # possible choices: "simpler_model", "GSSM", "BYMM", "BYMM_temp", "BYMM"
+
+## Load required data objects based on above preferences
+file=paste0(model_type,"_preditaly_", sex,".Rdata")
+load(file)
+load(paste0("BYMM_",sex, ".RData"))
+
+## Create relevant object which filters regions within selected macroarea
+if (area=="NordOvest") {
+  relevant=c("Piemonte","Valle d'Aosta", "Liguria")
+}
+if (area=="Lombardia") {
+  relevant=c("Lombardia")
+}
+if (area=="NordEst") {
+  relevant=c("Emilia-Romagna", "Trentino-Alto Adige","Veneto","Friuli Venezia Giulia")
+}
+if (area=="Centro") {
+  relevant=c("Abruzzo","Lazio","Marche","Molise","Toscana","Umbria")
+}
+if (area=="Sud") {
+  relevant=c("Basilicata","Calabria","Campania","Puglia","Sardegna","Sicilia")
+}
+
+## Selects 9 provinces with the highest percentage excess deaths for the macroarea chosen 
+## (in preference selections)
+province2plot = function(area) {
+  pred.italy$prediction = pred.italy$prediction %>% filter(Region%in%relevant)
+  province4plotting <- as.character((pred.italy$prediction %>% 
+                                       filter(paste0("Total.",sex)>=100000) %>% arrange(desc(mean.excess)) %>% 
+                                       select(mean.excess,Province,Region) %>% group_by(Province) %>%
+                                       slice(1) %>% ungroup() %>% 
+                                       arrange(desc(mean.excess)))$Province)[1:9]
+  return(province4plotting)
+}
+
+## Selects 6 regions with the highest percentage excess deaths for any macroarea
+regions2plot = as.character((pred.italy$prediction %>% arrange(desc(mean.excess)) %>% 
+                               select(mean.excess,Region) %>% group_by(Region) %>% slice(1) %>%
+                               ungroup() %>% 
+                               arrange(desc(mean.excess)))$Region)[1:6]
+
+## Make a map of the Italian regions for the Italy section of the Background section of written report
+
+# Make map using ggplot
+require(ggplot2)
+toplot = prov.shp
+toplot@data = toplot@data %>% distinct()
+toplot@data=as_tibble(toplot@data %>% mutate(COD_REG=as.numeric(as.character(COD_REG)),
+                                             COD_PROV=as.numeric(as.character(COD_PROV))))
+## Set theme of maps
+theme_set(theme_bw()) 
+
+## Create Italian region map pdf
+pdf("Italian_regions.pdf")  
+italian_map <- ggplot(data=sf::st_as_sf(toplot,coords=c(SHAPE_AREA,SHAPE_LEN))) +
+  geom_sf() + 
+  geom_sf(data = sf::st_as_sf(toplot,coords=c(SHAPE_AREA,SHAPE_LEN)), 
+          ## Controls the thickness of the borders
+          size=.5) +
+  geom_sf(data = sf::st_as_sf(toplot,coords=c(SHAPE_AREA,SHAPE_LEN)) %>% group_by(COD_REG) %>% summarise(),         
+          fill=c("darkblue", "darkblue", "blue", "lightblue", "lightblue", "lightblue", 
+                 "darkblue", "lightblue", "mediumblue", "mediumblue",
+                 "mediumblue", "mediumblue", "steelblue1", "steelblue1", "steelblue1", 
+                 "steelblue1", "steelblue1", "steelblue1", "steelblue1",
+                 "steelblue1"),color="grey100",size=0.8) +                                                      
+  theme(axis.line=element_blank(),axis.text.x=element_blank(),   
+        axis.text.y=element_blank(),axis.ticks=element_blank(),  
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank()) +
+  geom_sf_label(data = sf::st_centroid(sf::st_as_sf(toplot,coords=c(SHAPE_AREA,SHAPE_LEN)) %>%
+                                         group_by(Region) %>% summarise()),aes(label=Region), size=3) +
+  + theme(legend.title = element_blank()) + 
+  scale_fill_manual(values = fill,
+                    labels = c('North-West', 'Lombardia', 'North-East', 'Centre', 'South'))
+italian_map
+dev.off()
+
+## Loads library for arranging plots in pdf output
+library(gridExtra)
+
+## Create vis.xs.rate graphs
+plot.list=lapply(province2plot(area),function(x) vis.xs.rate(pred.italy,x)) #vis.xs.rate doesn't
+## have sex= argument in it so need to add it
+pdf(paste0("excess_rate_",model_type, "_", sex,"_",area, ".pdf"),width=30,height=24)
+do.call(grid.arrange,c(plot.list,ncol=3))
+dev.off()
+
+## Create vis.rate graphs
+plot.list2=lapply(province2plot(area),function(x) vis.rate(pred.italy,x, sex = "male", multi=TRUE)) 
+# set sex to gender being look at
+pdf(paste0("excess_mortality_",model_type,"_",sex, "_",area, ".pdf"),width=30,height=24) 
+do.call(grid.arrange,c(plot.list2,ncol=3))
+dev.off()
+
+# Create plot.smr graphs
+plot.list=lapply(province2plot(area),function(x) plot.smr(pred.italy,x)) 
+pdf(paste0("smr_",model_type, "_", sex,"_",area, ".pdf"),width=30,height=24)
+do.call(grid.arrange,c(plot.list,ncol=3))
+dev.off()
+
+## Maps of the most affected regions in the country (in terms of percentage excess mortality)
+pdf(paste0("WeeklyTrendProv_all_",model_type,"_",sex,"_6regions.pdf")) 
+lemon::grid_arrange_shared_legend(
+  make.map(1,pred.italy,region=regions2plot,labels=TRUE,legend="none"),
+  make.map(2,pred.italy,region=regions2plot,labels=TRUE,legend="none"),
+  make.map(3,pred.italy,region=regions2plot,labels=TRUE,legend="none"),
+  make.map(4,pred.italy,region=regions2plot,labels=TRUE,legend="none"),
+  nrow=2,ncol=2,position="bottom"
+  
+)
+lemon::grid_arrange_shared_legend(
+  make.map(5,pred.italy,region=regions2plot,labels=TRUE,legend="none"),
+  make.map(6,pred.italy,region=regions2plot,labels=TRUE,legend="none"),
+  make.map(7,pred.italy,region=regions2plot,labels=TRUE,legend="none"),
+  make.map(8,pred.italy,region=regions2plot,labels=TRUE,legend="none"),
+  nrow=2, ncol=2, position="bottom"
+)
+lemon::grid_arrange_shared_legend(
+  make.map(9,pred.italy,region=regions2plot,labels=TRUE,legend="none"),
+  make.map(10,pred.italy,region=regions2plot,labels=TRUE,legend="none"),
+  make.map(11,pred.italy,region=regions2plot,labels=TRUE,legend="none"),
+  make.map(12,pred.italy,region=regions2plot,labels=TRUE,legend="none"),
+  nrow=2, ncol=2, position="bottom"
+)
+lemon::grid_arrange_shared_legend(
+  make.map(13,pred.italy,region=regions2plot,labels=TRUE,legend="none"), 
+  make.map(14,pred.italy,region=regions2plot,labels=TRUE,legend="none"), 
+  make.map(15,pred.italy,region=regions2plot,labels=TRUE,legend="none"), 
+  make.map(16,pred.italy,region=regions2plot,labels=TRUE,legend="none"),
+  nrow=2, ncol=2,position="bottom"
+)
+lemon::grid_arrange_shared_legend(
+  make.map(17,pred.italy,region=regions2plot,labels=TRUE,legend="none"),
+  nrow=2,ncol=2,position="bottom" 
+)
+dev.off()
+
+## Character string of the regions in the macroarea selected (in preferences)
+region = relevant
+
+## Maps of regions within the relevant macroarea selected (in preferences)
+pdf(paste0("WeeklyTrendProv_all_",model_type,"_",sex,"_", area, ".pdf")) 
+lemon::grid_arrange_shared_legend(
+  make.map(1,pred.italy,region=region,labels=TRUE,legend="none"),
+  make.map(2,pred.italy,region=region,labels=TRUE,legend="none"),
+  make.map(3,pred.italy,region=region,labels=TRUE,legend="none"),
+  make.map(4,pred.italy,region=region,labels=TRUE,legend="none"),
+  nrow=2,ncol=2,position="bottom"
+  
+)
+lemon::grid_arrange_shared_legend(
+  make.map(5,pred.italy,region=region,labels=TRUE,legend="none"),
+  make.map(6,pred.italy,region=region,labels=TRUE,legend="none"),
+  make.map(7,pred.italy,region=region,labels=TRUE,legend="none"),
+  make.map(8,pred.italy,region=region,labels=TRUE,legend="none"),
+  nrow=2, ncol=2, position="bottom"
+)
+lemon::grid_arrange_shared_legend(
+  make.map(9,pred.italy,region=region,labels=TRUE,legend="none"),
+  make.map(10,pred.italy,region=region,labels=TRUE,legend="none"),
+  make.map(11,pred.italy,region=region,labels=TRUE,legend="none"),
+  make.map(12,pred.italy,region=region,labels=TRUE,legend="none"),
+  nrow=2, ncol=2, position="bottom"
+)
+lemon::grid_arrange_shared_legend(
+  make.map(13,pred.italy,region=region,labels=TRUE,legend="none"), 
+  make.map(14,pred.italy,region=region,labels=TRUE,legend="none"), 
+  make.map(15,pred.italy,region=region,labels=TRUE,legend="none"), 
+  make.map(16,pred.italy,region=region,labels=TRUE,legend="none"),
+  nrow=2, ncol=2,position="bottom"
+)
+lemon::grid_arrange_shared_legend(
+  make.map(17,pred.italy,region=region,labels=TRUE,legend="none"),
+  nrow=2,ncol=2,position="bottom" 
+)
+dev.off()
+
+## Plot vis.trends for the main 5 macroareas
+groups=list()
+groups[[1]]=c("Piemonte","Valle d'Aosta", "Liguria")
+groups[[2]]="Lombardia"
+groups[[3]]=c("Emilia-Romagna", "Trentino-Alto Adige","Veneto","Friuli Venezia Giulia")
+groups[[4]]=c("Lazio","Marche","Toscana","Umbria")
+groups[[5]]=c("Abruzzo","Basilicata","Calabria","Campania","Molise","Puglia","Sardegna",
+              "Sicilia")
+names(groups)=c("North-Western Italy","Lombardia","North-Eastern Italy","Central Italy",
+                "Southern Italy + Islands")
+
+## Create plots for all 5 macroareas for sex selected (in preferences)
+plot.list=lapply(groups, function(x) vis.trends(pred.italy,x,ylim=c(500,4000)))
+pdf(paste0("total_trends_macroarea_",sex,".pdf"),width=18,height=16)
+do.call(grid.arrange,c(plot.list,ncol=2))
+dev.off()
+
+## Create vis.trends plots for all 20 regions for sex selected (in preferences)
+regions=as.character((pred.italy$prediction_reg %>% group_by(Region) %>% slice(1) %>%
+                        ungroup())$Region)
+plot.list=lapply(regions,function(x) vis.trends(pred.italy,x))
+pdf(paste0("total_trends_", model_type,"_", sex,".pdf"),width=19,height=16) 
+do.call(grid.arrange,c(plot.list[1:4],ncol=2))
+do.call(grid.arrange,c(plot.list[5:8],ncol=2))
+do.call(grid.arrange,c(plot.list[9:12],ncol=2))
+do.call(grid.arrange,c(plot.list[13:16],ncol=2))
+do.call(grid.arrange,c(plot.list[17:20],ncol=2))
+dev.off()
+
+## STEP 5: Functions for calculating posterior probabilities on selected provinces, 
+## regions, macroareas, weeks
+
+## Posterior probabilitiy that the estimated mortality exceeds the observed for a specific 
+## week/province
+province_posterior_probability_estimated_exceeds_obs = function(Week, province, pred) {
+  sample = pred %>% arrange(week) %>% filter(Province==province) %>% filter(week==Week)
+  observed = sample %>% select(observed)
+  sample = sample %>% select(contains("simulation"))
+  count=0
+  for(i in sample) {
+    if (i>observed) {
+      count = count + 1
+    }
+    
+  }
+  post_prob = 100*count/1000
+  return(post_prob)
+}
+
+## Example: for Bergamo in week 11
+province_posterior_probability_estimated_exceeds_obs(Week=11, province="Bergamo", 
+                                                     pred=pred.italy$prediction)
+
+## Posterior probabilty the oberved mortality exceeds predicted on specific province/week
+province_posterior_probability_obs_exceeds_est = function(Week, province, pred) {
+  sample = pred %>% arrange(week) %>% filter(Province==province) %>% filter(week==Week)
+  observed = sample %>% select(observed)
+  sample = sample %>% select(contains("simulation"))
+  count=0
+  for(i in sample) {
+    if (observed>i) {
+      count = count + 1
+    }
+    
+  }
+  post_prob = 100*count/1000
+  return(post_prob)
+}
+
+## Example: Bergamo in week 11
+province_posterior_probability_obs_exceeds_est(Week=11, province="Bergamo", 
+                                               pred=pred.italy$prediction)
+
+## Posterior probability that percentage excess mortality exceeds 0% on specific province/week
+province_posterior_probability_percexcess_exceeds_zero = function(Week, province, pred) {
+  sample = pred %>% arrange(week) %>% filter(Province==province) %>% filter(week==Week)
+  sample = sample %>% select(contains("xs"))
+  count=0
+  for(i in sample) {
+    if (i>0) {
+      count = count + 1
+    }
+    
+  }
+  post_prob = 100*count/1000
+  return(post_prob)
+}
+
+## Examples: Cremona in week 6 and Lodi in week 7 
+province_posterior_probability_percexcess_exceeds_zero(Week=6, province="Cremona", 
+                                                       pred=pred.italy$prediction)
+province_posterior_probability_percexcess_exceeds_zero(Week=7, province="Lodi", 
+                                                       pred=pred.italy$prediction)
+
+## Posterior probability that percentage excess mortality is less than 0% on specific province/week
+province_posterior_probability_percexcess_lessthan_zero = function(Week, province, pred) {
+  sample = pred %>% arrange(week) %>% filter(Province==province) %>% filter(week==Week)
+  sample = sample %>% select(contains("xs"))
+  count=0
+  for(i in sample) {
+    if (0>i) {
+      count = count + 1
+    }
+    
+  }
+  post_prob = 100*count/1000
+  return(post_prob)
+}
+
+## Example: Bolzano in week 17
+province_posterior_probability_percexcess_lessthan_zero(Week=17, province="Bolzano",
+                                                        pred=pred.italy$prediction)
+
+## Posterior probability that excess mortality is less than 0 for specific macroarea 
+## over whole study period
+macro_posterior_probability_excess_lessthan_zero = function(object) {
+  sample = object %>% select(contains("xs"))
+  count=0
+  for(i in sample) {
+    if (0>i) {
+      count = count + 1
+    }
+    
+  }
+  post_prob = 100*count/1000
+  return(post_prob)
+}
+
+## Examples: Females and Males in the South
+macro_posterior_probability_excess_lessthan_zero(sud.male)
+macro_posterior_probability_excess_lessthan_zero(sud.female)
+
+## STEP 6: Other plots and tables used in the written report
+
+## Create datasets for the joined line scatter plot of observed vs. predicted deaths for
+## males and females in 2020
+sex='male'
+model_type='BYMM'
+load("BYMM_dataprovs.RData")
+file=paste0(model_type,"_preditaly_", sex,".Rdata")
+load(file)
+
+## Aggregate data for males across all regions
+predicted_male=pred.italy$prediction %>% group_by(week) %>% arrange(week) %>% 
+  summarise_at(vars("observed",starts_with("simulation")),funs(sum))
+
+## Calculate summary statistics across all simulations for each week 
+predicted_male=predicted_male %>% 
+  mutate(mean=apply(as.matrix(predicted_male %>% 
+                                select(contains("simulation"))),1,mean,na.rm=TRUE),
+         median=apply(as.matrix(predicted_male %>% 
+                                  select(contains("simulation"))),1,median,na.rm=TRUE),
+         sd=apply(as.matrix(predicted_male %>% 
+                              select(contains("simulation"))),1,sd,na.rm=TRUE),
+         low=apply(as.matrix(predicted_male %>% 
+                               select(contains("simulation"))),1,quantile,.025,na.rm=TRUE),
+         upp=apply(as.matrix(predicted_male %>% 
+                               select(contains("simulation"))),1,quantile,.975,na.rm=TRUE)) %>% 
+  select(week,observed,mean,sd,low,median,upp)
+
+## Do same process for females
+sex='female'
+file=paste0(model_type,"_preditaly_", sex,".Rdata")
+load(file)
+predicted_female=pred.italy$prediction %>% group_by(week) %>% arrange(week) %>% 
+  summarise_at(vars("observed",starts_with("simulation")),funs(sum))
+predicted_female=predicted_female %>% 
+  mutate(mean=apply(as.matrix(predicted_female %>% 
+                                select(contains("simulation"))),1,mean,na.rm=TRUE),
+         median=apply(as.matrix(predicted_female %>% 
+                                  select(contains("simulation"))),1,median,na.rm=TRUE),
+         sd=apply(as.matrix(predicted_female %>% 
+                              select(contains("simulation"))),1,sd,na.rm=TRUE),
+         low=apply(as.matrix(predicted_female %>% 
+                               select(contains("simulation"))),1,quantile,.025,na.rm=TRUE),
+         upp=apply(as.matrix(predicted_female %>% 
+                               select(contains("simulation"))),1,quantile,.975,na.rm=TRUE)) %>% 
+  select(week,observed,mean,sd,low,median,upp)
+
+predicted_female = predicted_female %>% mutate(excess=observed-mean)
+sum(predicted_female$excess)
+
+predicted_male = predicted_male %>% mutate(excess=observed-mean)
+sum(predicted_male$excess)
+
+## Save the male and female data objects for use in the RMarkdown plot
+save(predicted_male, predicted_female, file="total_mortality_plot_data.RData")
+
+
+
+```
+
+\newpage
+# References 
+
+
